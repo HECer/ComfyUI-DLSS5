@@ -7,9 +7,12 @@ This extension contains no NVIDIA runtime DLLs. Its setup script expects files t
 - Project: <https://github.com/Kim2091/vapourkit>
 - Nightly builds: <https://github.com/Kim2091/vapourkit-nightly/releases>
 - Tested nightly: <https://github.com/Kim2091/vapourkit-nightly/releases/tag/nightly-2026-08-31>
+- Community/support Discord: <https://discord.gg/uYKMn2hGwB>
 - License: GPL-3.0 for the VapourKit project; bundled third-party components may use other licenses.
 
 The tested environment used a VapourKit nightly containing `vsdlsssr.dll`, `vsdlssnr.dll`, a VapourSynth-capable Python runtime, and `nvngx_dlss.dll`. Nightlies are pre-releases and may change without compatibility guarantees.
+
+The Discord invite is linked by the VapourKit project. Treat it as a community and support channel. A file attached by an individual member is not automatically an official release, integrity guarantee, or grant of redistribution rights.
 
 ## NVIDIA DLSS
 
