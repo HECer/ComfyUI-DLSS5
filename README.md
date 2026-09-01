@@ -81,6 +81,22 @@ The fixed 8-frame discontinuity was not measurable above ordinary frames in this
 
 See [Runtime sources and legal notes](docs/RUNTIME_SOURCES.md) before installation.
 
+## Where to get every required component
+
+| Component | Files used by this extension | Source | Setup handling |
+| --- | --- | --- | --- |
+| ComfyUI | ComfyUI installation | [Official ComfyUI repository](https://github.com/comfyanonymous/ComfyUI) | Pass its directory to `-ComfyUIPath`. |
+| This extension | Python nodes, workflows, setup script | [ComfyUI-DLSS5 releases](https://github.com/HECer/ComfyUI-DLSS5/releases) | Clone or extract it; do not copy runtime DLLs into Git. |
+| VapourKit Windows runtime | VapourSynth `python.exe`, `vsdlsssr.dll`, `vsdlssnr.dll`, `nvngx_dlss.dll` | [VapourKit project](https://github.com/Kim2091/vapourkit) or the [tested 2026-08-31 nightly](https://github.com/Kim2091/vapourkit-nightly/releases/tag/nightly-2026-08-31) | Extract it and pass the root directory to `-VapourKitPath`; setup locates the files recursively. |
+| NVIDIA DLSS reference/runtime licensing | DLSS documentation and official SR SDK/runtime source | [Official NVIDIA/DLSS repository](https://github.com/NVIDIA/DLSS) and [NVIDIA DLSS developer page](https://developer.nvidia.com/rtx/dlss) | Read the included licenses. The tested VapourKit package already supplies the SR runtime expected by setup. |
+| Experimental neural-rendering runtime | `nvngx_dlssnr.dll` | No generally available official NVIDIA download was identified for this experimental file at release time. Use only a copy from software you legally obtained and whose terms permit this use. | Pass the exact local file to `-NeuralRuntimeDll`. The file is copied only into the ignored local `runtime` directory. |
+| Depth guide | Depth Anything V2 Small/Base/Large weights | [Depth Anything V2 Small model card](https://huggingface.co/depth-anything/Depth-Anything-V2-Small-hf) and [Depth Anything organization](https://huggingface.co/depth-anything) | Downloaded automatically by Transformers on first use. |
+| Motion guide | TorchVision RAFT Small/Large weights | [TorchVision RAFT documentation](https://pytorch.org/vision/stable/models/raft.html) | Downloaded automatically by TorchVision on first use. |
+| Video loading/encoding | Video Helper Suite custom nodes | [ComfyUI-VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite) | Optional for the supplied video workflows; install through ComfyUI Manager or from its repository. |
+| GPU driver | Current NVIDIA Windows driver | [Official NVIDIA driver download](https://www.nvidia.com/Download/index.aspx) | Install outside ComfyUI and restart Windows if requested. |
+
+ReShade, game-specific injectors, DLSS override utilities, and Nexus mods are not dependencies of this extension. Do not download a DLL merely because its filename matches: provenance, version compatibility, licensing, and integrity still matter.
+
 ## One-time setup
 
 ### 1. Clone the extension
@@ -94,10 +110,11 @@ The repository may live anywhere. The setup script creates a junction in ComfyUI
 
 ### 2. Obtain and extract VapourKit
 
-Download a compatible Windows build from the official VapourKit project or its nightly releases:
+Download a compatible Windows build from the official VapourKit project or its nightly releases. The release used during development was the 2026-08-31 nightly:
 
 - <https://github.com/Kim2091/vapourkit>
 - <https://github.com/Kim2091/vapourkit-nightly/releases>
+- <https://github.com/Kim2091/vapourkit-nightly/releases/tag/nightly-2026-08-31>
 
 Keep the extracted directory. The extension records the path to its isolated VapourSynth Python runtime.
 

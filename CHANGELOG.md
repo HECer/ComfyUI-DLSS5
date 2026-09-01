@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.0 documentation update
+
+- Added direct, component-by-component source links and clarified which downloads are automatic, optional, or user-supplied.
+- Documented the exact VapourKit nightly used during development.
+
 ## 0.1.0-alpha
 
 - Initial public alpha package.
