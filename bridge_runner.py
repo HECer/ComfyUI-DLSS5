@@ -1,4 +1,5 @@
 """Isolated VapourSynth runner used by the ComfyUI node."""
+
 from __future__ import annotations
 
 import argparse
@@ -37,14 +38,21 @@ def main() -> None:
         if original_count == 1:
             depth_frames = np.concatenate((depth_frames, depth_frames), axis=0)
             motion_frames = np.concatenate((motion_frames, motion_frames), axis=0)
-        if depth_frames.shape != (len(frames), height, width) or motion_frames.shape != (len(frames), height, width, 2):
+        if depth_frames.shape != (
+            len(frames),
+            height,
+            width,
+        ) or motion_frames.shape != (len(frames), height, width, 2):
             raise ValueError("guide dimensions must match color [frames,height,width]")
 
     core = vs.core
     if not hasattr(core, "dlssnr"):
         core.std.LoadPlugin(path=str(Path(args.plugin).resolve()))
     blank = core.std.BlankClip(
-        width=width, height=height, length=len(frames), format=vs.RGBS,
+        width=width,
+        height=height,
+        length=len(frames),
+        format=vs.RGBS,
         color=[0.0, 0.0, 0.0],
     )
 
@@ -68,17 +76,28 @@ def main() -> None:
         bypass_caller_check=1,
     )
     if depth_frames is not None:
-        depth_blank = core.std.BlankClip(width=width, height=height, length=len(frames),
-                                         format=vs.GRAYS, color=[0.0])
-        motion_blank = core.std.BlankClip(width=width, height=height, length=len(frames),
-                                          format=vs.RGBS, color=[0.0, 0.0, 0.0])
+        depth_blank = core.std.BlankClip(
+            width=width, height=height, length=len(frames), format=vs.GRAYS, color=[0.0]
+        )
+        motion_blank = core.std.BlankClip(
+            width=width,
+            height=height,
+            length=len(frames),
+            format=vs.RGBS,
+            color=[0.0, 0.0, 0.0],
+        )
+
         def upload_depth(n: int, f: vs.VideoFrame) -> vs.VideoFrame:
-            out = f.copy(); np.asarray(out[0])[:, :width] = depth_frames[n]; return out
+            out = f.copy()
+            np.asarray(out[0])[:, :width] = depth_frames[n]
+            return out
+
         def upload_motion(n: int, f: vs.VideoFrame) -> vs.VideoFrame:
             out = f.copy()
             np.asarray(out[0])[:, :width] = motion_frames[n, :, :, 0]
             np.asarray(out[1])[:, :width] = motion_frames[n, :, :, 1]
             return out
+
         kwargs.update(
             depth=core.std.ModifyFrame(depth_blank, depth_blank, upload_depth),
             mvec=core.std.ModifyFrame(motion_blank, motion_blank, upload_motion),
@@ -87,12 +106,15 @@ def main() -> None:
             mvec_scale_y=float(settings.get("mvec_scale_y", 1.0)),
         )
     enhanced = core.dlssnr.Enhance(source, **kwargs)
-    result = np.lib.format.open_memmap(args.output, mode="w+", dtype=np.float32,
-                                       shape=(len(frames), height, width, 3))
+    result = np.lib.format.open_memmap(
+        args.output, mode="w+", dtype=np.float32, shape=(len(frames), height, width, 3)
+    )
     for index in range(len(frames)):
         frame = enhanced.get_frame(index)
         for plane in range(3):
-            result[index, :, :, plane] = np.clip(np.asarray(frame[plane])[:, :width], 0.0, 1.0)
+            result[index, :, :, plane] = np.clip(
+                np.asarray(frame[plane])[:, :width], 0.0, 1.0
+            )
     if original_count == 1:
         single = np.asarray(result[-1:]).copy()
         del result

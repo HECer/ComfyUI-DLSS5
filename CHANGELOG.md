@@ -4,6 +4,8 @@
 
 - Added direct, component-by-component source links and clarified which downloads are automatic, optional, or user-supplied.
 - Documented the exact VapourKit nightly used during development.
+- Added a Manager-friendly one-click runtime installer with a pinned URL and SHA-256 verification; only `nvngx_dlssnr.dll` remains user-supplied.
+- Exposed runtime installation as a ComfyUI output node, so the recommended setup requires no terminal.
 
 ## 0.1.0-alpha
 

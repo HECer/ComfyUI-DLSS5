@@ -1,7 +1,8 @@
 .git/**
 .github/**
 tests/**
-runtime/**
+runtime/*
+!runtime/README.md
 *.mp4
 *.mkv
 *.mov

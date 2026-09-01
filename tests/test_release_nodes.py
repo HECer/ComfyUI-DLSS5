@@ -56,3 +56,11 @@ def test_easy_presets_cover_quality_and_memory_scenarios():
     assert preview["flow_model"] == "Optical Flow (fastest)"
     assert nodes._easy_preset("Auto (recommended)", 1) == still
     assert nodes._easy_preset("Auto (recommended)", 240) == long_video
+
+
+def test_runtime_setup_check_creates_and_reports_drop_location(monkeypatch, tmp_path):
+    monkeypatch.setattr(nodes, "PACKAGE", tmp_path)
+    report = nodes.DLSS5RuntimeSetup().run("Check location", False)[0]
+    assert (tmp_path / "runtime").is_dir()
+    assert "nvngx_dlssnr.dll" in report
+    assert "MISSING" in report

@@ -99,6 +99,22 @@ ReShade, game-specific injectors, DLSS override utilities, and Nexus mods are no
 
 ## One-time setup
 
+### Recommended: ComfyUI Manager + one-click runtime setup
+
+1. Install **ComfyUI-DLSS5** with ComfyUI Manager. Until the Registry listing is approved, use Manager's Git URL installation with `https://github.com/HECer/ComfyUI-DLSS5`.
+2. Restart ComfyUI once so Manager installs the dependencies declared in `pyproject.toml`/`requirements.txt`.
+3. Add **DLSS Runtime Setup (One Click)** to a workflow, leave `action` at `Check location`, and queue it. The output shows the exact local `runtime` directory and creates it if necessary.
+4. Copy your legally obtained `nvngx_dlssnr.dll` to that displayed location. Keep the exact filename.
+5. In the same node, select `Install verified VapourKit`, enable `confirm_download`, and queue it again.
+
+The installer downloads the pinned [VapourKit Windows nightly](https://github.com/Kim2091/vapourkit-nightly/releases/tag/nightly-2026-08-31), verifies its published SHA-256 (`af3ecfb868a96477ab10e1588d7bac0fb2729332f2f464b998677efdee9e0554`), extracts it into the ignored local runtime directory, locates all wrappers/runtimes, and writes `runtime/config.json`. Restart ComfyUI and run **DLSS 5 Runtime Status**.
+
+The 368 MB VapourKit archive is downloaded only once. Extracted files and configuration remain local and are excluded from Git and Registry packages. The installer never downloads `nvngx_dlssnr.dll`.
+
+No terminal or PowerShell command is required for the recommended path. `install_runtime.ps1` and `install_runtime.py` remain available as headless/manual alternatives.
+
+### Manual/existing VapourKit setup
+
 ### 1. Clone the extension
 
 ```powershell
