@@ -5,7 +5,9 @@ An unofficial Windows-only ComfyUI extension that connects image and video batch
 > [!IMPORTANT]
 > This project is not affiliated with, endorsed by, or supported by NVIDIA, ComfyUI, RenoDX, or VapourKit. It does **not** distribute NVIDIA runtime DLLs or patched game files. You must obtain every runtime file legally and review its license and trust implications yourself.
 
-![Input passes and guided output](docs/images/pass-overview.png)
+![Alyx original, neutral neural rendering, stronger style, and difference heatmap](docs/images/style-comparison.png)
+
+*Alyx comparison: original, neutral rendering, stronger neural style, and a difference heatmap. Images retain their original aspect ratio.*
 
 ## What this extension does
 
@@ -40,10 +42,6 @@ Known limitations:
 The comparison canvas preserves aspect ratio; images are fitted, never stretched.
 
 ![Original, 2x, and 4x comparison](docs/images/scale-comparison.jpg)
-
-### Neural-rendering styles
-
-![Neutral and stronger neural rendering styles](docs/images/style-comparison.png)
 
 ### Persistent 10-second video test
 
