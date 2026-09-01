@@ -1,0 +1,15 @@
+__pycache__/
+.pytest_cache/
+*.py[cod]
+runtime/*
+!runtime/README.md
+output/
+temp/
+*.log
+*.mp4
+*.mkv
+*.mov
+*.dll
+*.exe
+*.zip
+*.7z

@@ -1,0 +1,90 @@
+{
+  "last_node_id": 4,
+  "last_link_id": 3,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "LoadImage",
+      "title": "STEP 1 — Choose an image",
+      "pos": [40, 180],
+      "size": [315, 314],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {"name": "image", "type": "COMBO", "widget": {"name": "image"}},
+        {"name": "upload", "type": "IMAGEUPLOAD", "widget": {"name": "upload"}}
+      ],
+      "outputs": [
+        {"name": "IMAGE", "type": "IMAGE", "links": [1], "slot_index": 0},
+        {"name": "MASK", "type": "MASK", "links": null}
+      ],
+      "properties": {"Node name for S&R": "LoadImage", "Node note": "Use media you are allowed to process and publish."},
+      "widgets_values": ["example.png", "image"]
+    },
+    {
+      "id": 2,
+      "type": "DLSS5EasyPipeline",
+      "title": "STEP 2 — Easy upscale + neural rendering",
+      "pos": [440, 150],
+      "size": [420, 390],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {"name": "image", "type": "IMAGE", "link": 1},
+        {"name": "scenario", "type": "COMBO", "widget": {"name": "scenario"}},
+        {"name": "operation", "type": "COMBO", "widget": {"name": "operation"}},
+        {"name": "scale", "type": "COMBO", "widget": {"name": "scale"}},
+        {"name": "quality", "type": "COMBO", "widget": {"name": "quality"}},
+        {"name": "look", "type": "COMBO", "widget": {"name": "look"}},
+        {"name": "effect_strength", "type": "FLOAT", "widget": {"name": "effect_strength"}}
+      ],
+      "outputs": [
+        {"name": "image", "type": "IMAGE", "links": [2, 3], "slot_index": 0},
+        {"name": "runtime_report", "type": "STRING", "links": null, "slot_index": 1}
+      ],
+      "properties": {"Node name for S&R": "DLSS5EasyPipeline", "Node note": "Start with Neutral / faithful. Switch to the Advanced workflow for authored guides or exact temporal controls."},
+      "widgets_values": ["Auto (recommended)", "Upscale + neural rendering", "2x", "Quality", "Neutral / faithful", 0.85]
+    },
+    {
+      "id": 3,
+      "type": "PreviewImage",
+      "title": "STEP 3 — Inspect at 100%",
+      "pos": [930, 80],
+      "size": [430, 390],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [{"name": "images", "type": "IMAGE", "link": 2}],
+      "outputs": [],
+      "properties": {"Node note": "Never stretch comparison images; compare the same crop at native pixel scale."},
+      "widgets_values": []
+    },
+    {
+      "id": 4,
+      "type": "SaveImage",
+      "title": "STEP 4 — Save result",
+      "pos": [930, 520],
+      "size": [340, 270],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {"name": "images", "type": "IMAGE", "link": 3},
+        {"name": "filename_prefix", "type": "STRING", "widget": {"name": "filename_prefix"}}
+      ],
+      "outputs": [],
+      "properties": {"Node note": "ComfyUI may embed workflow metadata in saved outputs."},
+      "widgets_values": ["DLSS5/easy-2x"]
+    }
+  ],
+  "links": [[1, 1, 0, 2, 0, "IMAGE"], [2, 2, 0, 3, 0, "IMAGE"], [3, 2, 0, 4, 0, "IMAGE"]],
+  "groups": [
+    {"title": "ONE-NODE START", "bounding": [400, 100, 500, 490], "color": "#6f5630", "font_size": 24},
+    {"title": "OUTPUT — no stretching", "bounding": [900, 40, 500, 790], "color": "#486b33", "font_size": 24}
+  ],
+  "config": {},
+  "extra": {"ds": {"scale": 0.78, "offset": [40, 70]}, "release_notes": ["The Easy node downloads Depth Anything V2 Small on first use.", "Video quality presets additionally download RAFT weights.", "This is an unofficial experimental integration and requires a user-supplied runtime."]},
+  "version": 0.4
+}

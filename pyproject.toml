@@ -1,0 +1,29 @@
+[project]
+name = "experimental-dlss-neural-rendering"
+version = "0.1.0"
+description = "Experimental Windows bridge for NVIDIA DLSS Super Resolution and neural rendering in ComfyUI."
+readme = "README.md"
+requires-python = ">=3.10,<3.14"
+license = { file = "LICENSE" }
+dependencies = [
+  "numpy>=1.26,<3",
+  "opencv-python>=4.8",
+  "Pillow>=10",
+  "transformers>=4.50,<6",
+  "torchvision>=0.20",
+]
+classifiers = [
+  "Operating System :: Microsoft :: Windows :: Windows 10",
+  "Operating System :: Microsoft :: Windows :: Windows 11",
+  "Environment :: GPU :: NVIDIA CUDA",
+  "Programming Language :: Python :: 3",
+]
+
+[project.urls]
+Repository = "https://github.com/HECer/ComfyUI-DLSS5"
+Documentation = "https://github.com/HECer/ComfyUI-DLSS5#readme"
+"Bug Tracker" = "https://github.com/HECer/ComfyUI-DLSS5/issues"
+
+[tool.comfy]
+PublisherId = "HECer"
+DisplayName = "Experimental DLSS Neural Rendering"

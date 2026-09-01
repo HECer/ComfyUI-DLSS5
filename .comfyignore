@@ -1,0 +1,11 @@
+.git/**
+.github/**
+tests/**
+runtime/**
+*.mp4
+*.mkv
+*.mov
+*.dll
+*.exe
+*.zip
+*.7z

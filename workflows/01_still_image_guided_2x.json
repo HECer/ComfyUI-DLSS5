@@ -1,0 +1,515 @@
+{
+    "last_node_id": 6,
+    "last_link_id": 7,
+    "nodes": [
+        {
+            "id": 1,
+            "type": "LoadImage",
+            "title": "STEP 1 \u2014 Choose an image",
+            "pos": [
+                40,
+                220
+            ],
+            "size": [
+                315,
+                314
+            ],
+            "flags": {},
+            "order": 0,
+            "mode": 0,
+            "inputs": [
+                {
+                    "name": "image",
+                    "type": "COMBO",
+                    "widget": {
+                        "name": "image"
+                    }
+                },
+                {
+                    "name": "upload",
+                    "type": "IMAGEUPLOAD",
+                    "widget": {
+                        "name": "upload"
+                    }
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "IMAGE",
+                    "type": "IMAGE",
+                    "links": [
+                        1,
+                        2,
+                        3
+                    ],
+                    "slot_index": 0
+                },
+                {
+                    "name": "MASK",
+                    "type": "MASK",
+                    "links": null
+                }
+            ],
+            "properties": {
+                "Node name for S&R": "LoadImage",
+                "Node note": "Replace the placeholder with an image you are allowed to process."
+            },
+            "widgets_values": [
+                "example.png",
+                "image"
+            ]
+        },
+        {
+            "id": 2,
+            "type": "DLSS5DepthAnythingV2",
+            "title": "STEP 2A \u2014 Estimate depth",
+            "pos": [
+                410,
+                80
+            ],
+            "size": [
+                350,
+                180
+            ],
+            "flags": {},
+            "order": 1,
+            "mode": 0,
+            "inputs": [
+                {
+                    "name": "images",
+                    "type": "IMAGE",
+                    "link": 1
+                },
+                {
+                    "name": "model",
+                    "type": "COMBO",
+                    "widget": {
+                        "name": "model"
+                    }
+                },
+                {
+                    "name": "temporal_normalization",
+                    "type": "BOOLEAN",
+                    "widget": {
+                        "name": "temporal_normalization"
+                    }
+                },
+                {
+                    "name": "chunk_size",
+                    "type": "INT",
+                    "widget": {
+                        "name": "chunk_size"
+                    }
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "depth",
+                    "type": "IMAGE",
+                    "links": [
+                        4
+                    ],
+                    "slot_index": 0
+                }
+            ],
+            "properties": {
+                "Node name for S&R": "DLSS5DepthAnythingV2",
+                "Node note": "Small is the recommended first-run model. The model downloads on first use."
+            },
+            "widgets_values": [
+                "Small (recommended)",
+                true,
+                1
+            ]
+        },
+        {
+            "id": 3,
+            "type": "DLSS5OpticalFlow",
+            "title": "STEP 2B \u2014 Zero/optical motion guide",
+            "pos": [
+                410,
+                330
+            ],
+            "size": [
+                350,
+                180
+            ],
+            "flags": {},
+            "order": 2,
+            "mode": 0,
+            "inputs": [
+                {
+                    "name": "images",
+                    "type": "IMAGE",
+                    "link": 2
+                },
+                {
+                    "name": "pyramid_scale",
+                    "type": "FLOAT",
+                    "widget": {
+                        "name": "pyramid_scale"
+                    }
+                },
+                {
+                    "name": "levels",
+                    "type": "INT",
+                    "widget": {
+                        "name": "levels"
+                    }
+                },
+                {
+                    "name": "window_size",
+                    "type": "INT",
+                    "widget": {
+                        "name": "window_size"
+                    }
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "motion_vectors",
+                    "type": "IMAGE",
+                    "links": [
+                        5
+                    ],
+                    "slot_index": 0
+                }
+            ],
+            "properties": {
+                "Node name for S&R": "DLSS5OpticalFlow",
+                "Node note": "A single still has zero temporal motion. Use RAFT for real video."
+            },
+            "widgets_values": [
+                0.5,
+                5,
+                21
+            ]
+        },
+        {
+            "id": 4,
+            "type": "DLSS5FullPipeline",
+            "title": "STEP 3 \u2014 DLSS SR 2x + Neural Rendering",
+            "pos": [
+                830,
+                130
+            ],
+            "size": [
+                440,
+                600
+            ],
+            "flags": {},
+            "order": 3,
+            "mode": 0,
+            "inputs": [
+                {
+                    "name": "image",
+                    "type": "IMAGE",
+                    "link": 3
+                },
+                {
+                    "name": "depth",
+                    "type": "IMAGE",
+                    "link": 4
+                },
+                {
+                    "name": "motion_vectors",
+                    "type": "IMAGE",
+                    "link": 5
+                },
+                {
+                    "name": "scale",
+                    "type": "COMBO",
+                    "widget": {
+                        "name": "scale"
+                    }
+                },
+                {
+                    "name": "sr_quality",
+                    "type": "COMBO",
+                    "widget": {
+                        "name": "sr_quality"
+                    }
+                },
+                {
+                    "name": "processing_mode",
+                    "type": "COMBO",
+                    "widget": {
+                        "name": "processing_mode"
+                    }
+                },
+                {
+                    "name": "chunk_size",
+                    "type": "INT",
+                    "widget": {
+                        "name": "chunk_size"
+                    }
+                },
+                {
+                    "name": "history_overlap",
+                    "type": "INT",
+                    "widget": {
+                        "name": "history_overlap"
+                    }
+                },
+                {
+                    "name": "style",
+                    "type": "COMBO",
+                    "widget": {
+                        "name": "style"
+                    }
+                },
+                {
+                    "name": "style_strength",
+                    "type": "FLOAT",
+                    "widget": {
+                        "name": "style_strength"
+                    }
+                },
+                {
+                    "name": "intensity",
+                    "type": "FLOAT",
+                    "widget": {
+                        "name": "intensity"
+                    }
+                },
+                {
+                    "name": "local_structure",
+                    "type": "FLOAT",
+                    "widget": {
+                        "name": "local_structure"
+                    }
+                },
+                {
+                    "name": "skin_structure",
+                    "type": "FLOAT",
+                    "widget": {
+                        "name": "skin_structure"
+                    }
+                },
+                {
+                    "name": "auto_mask",
+                    "type": "BOOLEAN",
+                    "widget": {
+                        "name": "auto_mask"
+                    }
+                },
+                {
+                    "name": "depth_inverted",
+                    "type": "BOOLEAN",
+                    "widget": {
+                        "name": "depth_inverted"
+                    }
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "image",
+                    "type": "IMAGE",
+                    "links": [
+                        6,
+                        7
+                    ],
+                    "slot_index": 0
+                },
+                {
+                    "name": "runtime_report",
+                    "type": "STRING",
+                    "links": null,
+                    "slot_index": 1
+                }
+            ],
+            "properties": {
+                "Node name for S&R": "DLSS5FullPipeline",
+                "Node note": "Persistent mode creates one SR and one NR context. A still is internally initialized with a duplicate frame."
+            },
+            "widgets_values": [
+                "2x",
+                "Quality",
+                "Persistent full sequence",
+                8,
+                8,
+                "0 - neutral",
+                0.85,
+                1.0,
+                1.0,
+                -1.0,
+                true,
+                false
+            ]
+        },
+        {
+            "id": 5,
+            "type": "PreviewImage",
+            "title": "STEP 4 \u2014 Inspect at 100% zoom",
+            "pos": [
+                1340,
+                80
+            ],
+            "size": [
+                430,
+                420
+            ],
+            "flags": {},
+            "order": 4,
+            "mode": 0,
+            "inputs": [
+                {
+                    "name": "images",
+                    "type": "IMAGE",
+                    "link": 6
+                }
+            ],
+            "outputs": [],
+            "properties": {
+                "Node note": "Do not judge detail from a stretched preview."
+            },
+            "widgets_values": []
+        },
+        {
+            "id": 6,
+            "type": "SaveImage",
+            "title": "STEP 5 \u2014 Save result",
+            "pos": [
+                1340,
+                550
+            ],
+            "size": [
+                340,
+                270
+            ],
+            "flags": {},
+            "order": 5,
+            "mode": 0,
+            "inputs": [
+                {
+                    "name": "images",
+                    "type": "IMAGE",
+                    "link": 7
+                },
+                {
+                    "name": "filename_prefix",
+                    "type": "STRING",
+                    "widget": {
+                        "name": "filename_prefix"
+                    }
+                }
+            ],
+            "outputs": [],
+            "properties": {
+                "Node note": "ComfyUI may embed workflow metadata in outputs."
+            },
+            "widgets_values": [
+                "DLSS5/still-guided-2x"
+            ]
+        }
+    ],
+    "links": [
+        [
+            1,
+            1,
+            0,
+            2,
+            0,
+            "IMAGE"
+        ],
+        [
+            2,
+            1,
+            0,
+            3,
+            0,
+            "IMAGE"
+        ],
+        [
+            3,
+            1,
+            0,
+            4,
+            0,
+            "IMAGE"
+        ],
+        [
+            4,
+            2,
+            0,
+            4,
+            1,
+            "IMAGE"
+        ],
+        [
+            5,
+            3,
+            0,
+            4,
+            2,
+            "IMAGE"
+        ],
+        [
+            6,
+            4,
+            0,
+            5,
+            0,
+            "IMAGE"
+        ],
+        [
+            7,
+            4,
+            0,
+            6,
+            0,
+            "IMAGE"
+        ]
+    ],
+    "groups": [
+        {
+            "title": "GUIDES \u2014 estimated from pixels",
+            "bounding": [
+                380,
+                40,
+                410,
+                520
+            ],
+            "color": "#3f789e",
+            "font_size": 24
+        },
+        {
+            "title": "EXPERIMENTAL NVIDIA PIPELINE",
+            "bounding": [
+                800,
+                90,
+                500,
+                680
+            ],
+            "color": "#6f5630",
+            "font_size": 24
+        },
+        {
+            "title": "OUTPUT \u2014 compare without stretching",
+            "bounding": [
+                1310,
+                40,
+                500,
+                820
+            ],
+            "color": "#486b33",
+            "font_size": 24
+        }
+    ],
+    "config": {},
+    "extra": {
+        "ds": {
+            "scale": 0.72,
+            "offset": [
+                40,
+                80
+            ]
+        },
+        "release_notes": [
+            "Unofficial experimental integration; user-supplied runtime required.",
+            "Single images do not provide true temporal motion.",
+            "Inspect outputs at native aspect ratio and 100% zoom."
+        ]
+    },
+    "version": 0.4
+}
