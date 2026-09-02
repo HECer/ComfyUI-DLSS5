@@ -18,4 +18,12 @@ Set the video encoder FPS to the source FPS. The included value is 24 fps only a
 
 An independently importable variant of workflow 02 for longer sequences. It limits the native runtime working set with overlapping windows and blends their output. Raise `history_overlap` if a periodic boundary remains visible.
 
+## 04 — Video Depth Anything Small, temporal 2x
+
+Recommended video workflow. It replaces framewise depth plus post-stabilization with the official Apache-2.0 VDA-S temporal model. The first run downloads pinned source and official weights. RAFT still supplies current-to-previous motion vectors.
+
+## 05 — FlashDepth high-resolution, temporal 2x
+
+Optional expert workflow for high-resolution footage. FlashDepth runs in an isolated Torch 2.4 environment so it cannot alter ComfyUI's CUDA stack. Complete [`docs/FLASHDEPTH.md`](../docs/FLASHDEPTH.md) before queueing it.
+
 All workflows contain explanatory node titles, group labels, and machine-readable notes in `extra.release_notes` or `notes`.

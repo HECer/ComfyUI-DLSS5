@@ -40,6 +40,16 @@ def test_chunked_guides_write_memory_maps(tmp_path):
     assert np.load(mp, mmap_mode="r").shape == (5, 4, 6, 2)
 
 
+def test_temporal_video_depth_nodes_are_registered():
+    assert nodes.NODE_CLASS_MAPPINGS["DLSS5VideoDepthAnything"] is nodes.DLSS5VideoDepthAnything
+    assert nodes.NODE_CLASS_MAPPINGS["DLSS5FlashDepth"] is nodes.DLSS5FlashDepth
+
+
+def test_vda_exposes_blackwell_compatible_attention_size():
+    sizes = nodes.DLSS5VideoDepthAnything.INPUT_TYPES()["required"]["input_size"][0]
+    assert sizes == ["280 (compatible)", "392 (fast)", "518 (best)"]
+
+
 def test_runtime_config_is_optional(monkeypatch, tmp_path):
     monkeypatch.setattr(nodes, "PACKAGE", tmp_path)
     assert nodes._runtime_config() == {}

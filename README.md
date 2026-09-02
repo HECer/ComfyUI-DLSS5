@@ -18,7 +18,8 @@ An unofficial Windows-only ComfyUI extension that connects image and video batch
 - Runs NVIDIA DLSS Super Resolution at 2x, 3x, or 4x.
 - Runs the experimental neural rendering pass exposed by a user-supplied `nvngx_dlssnr.dll`.
 - Accepts depth and dense motion-vector guides.
-- Includes Depth Anything V2 and RAFT guide nodes.
+- Includes Depth Anything V2, temporally consistent Video Depth Anything Small, and RAFT guide nodes.
+- Offers FlashDepth as an isolated, optional high-resolution video-depth backend.
 - Stabilizes per-frame depth by reprojecting previous depth with backward motion.
 - Supports one persistent native context for short and medium sequences.
 - Provides bounded overlap-add processing as a lower-memory fallback.
@@ -93,6 +94,8 @@ See [Runtime sources and legal notes](docs/RUNTIME_SOURCES.md) before installati
 | NVIDIA DLSS reference/runtime licensing | DLSS documentation and official SR SDK/runtime source | [Official NVIDIA/DLSS repository](https://github.com/NVIDIA/DLSS) and [NVIDIA DLSS developer page](https://developer.nvidia.com/rtx/dlss) | Read the included licenses. The tested VapourKit package already supplies the SR runtime expected by setup. |
 | Experimental neural-rendering runtime | `nvngx_dlssnr.dll` | No generally available official NVIDIA download was identified for this experimental file at release time. Use only a copy from software you legally obtained and whose terms permit this use. | Pass the exact local file to `-NeuralRuntimeDll`. The file is copied only into the ignored local `runtime` directory. |
 | Depth guide | Depth Anything V2 Small/Base/Large weights | [Depth Anything V2 Small model card](https://huggingface.co/depth-anything/Depth-Anything-V2-Small-hf) and [Depth Anything organization](https://huggingface.co/depth-anything) | Downloaded automatically by Transformers on first use. |
+| Temporal video depth (recommended) | Video Depth Anything Small source and weights | [Official repository](https://github.com/DepthAnything/Video-Depth-Anything) and [official VDA-S weights](https://huggingface.co/depth-anything/Video-Depth-Anything-Small) | The VDA node downloads the Apache-2.0 source at a pinned commit and official weights on first use. |
+| High-resolution video depth (optional) | FlashDepth source, isolated environment, and checkpoint | [Official repository](https://github.com/Eyeline-Labs/FlashDepth) and [official weights](https://huggingface.co/Eyeline-Labs/FlashDepth) | Follow [the isolated setup guide](docs/FLASHDEPTH.md); ComfyUI's Torch environment is never replaced. |
 | Motion guide | TorchVision RAFT Small/Large weights | [TorchVision RAFT documentation](https://pytorch.org/vision/stable/models/raft.html) | Downloaded automatically by TorchVision on first use. |
 | Video loading/encoding | Video Helper Suite custom nodes | [ComfyUI-VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite) | Optional for the supplied video workflows; install through ComfyUI Manager or from its repository. |
 | GPU driver | Current NVIDIA Windows driver | [Official NVIDIA driver download](https://www.nvidia.com/Download/index.aspx) | Install outside ComfyUI and restart Windows if requested. |
@@ -193,6 +196,28 @@ The close view makes the full-pipeline controls readable, including processing m
 
 These screenshots show node layout and settings only; the placeholder image is bundled with ComfyUI and is not a quality result. See the Alyx comparison and persistent-video contact sheet above for representative output examples.
 
+### Temporal video-depth workflows
+
+For new video projects, import [`workflows/04_video_vda_small_temporal_2x.json`](workflows/04_video_vda_small_temporal_2x.json). VDA-S reasons over 32-frame temporal windows and aligns overlapping windows, so it replaces the framewise Depth Anything V2 plus stabilizer chain. RAFT remains responsible for the separate motion-vector guide.
+
+![Complete VDA-S temporal-depth workflow in ComfyUI](docs/images/comfyui-vda-workflow.png)
+
+![Detailed VDA-S and RAFT guide nodes in ComfyUI](docs/images/comfyui-vda-node-detail.png)
+
+The optional [`workflows/05_video_flashdepth_highres_2x.json`](workflows/05_video_flashdepth_highres_2x.json) targets high-resolution footage. FlashDepth is intentionally executed in its own environment because its official dependencies conflict with many current ComfyUI builds.
+
+![Complete optional FlashDepth workflow in ComfyUI](docs/images/comfyui-flashdepth-workflow.png)
+
+![Detailed optional FlashDepth node in ComfyUI](docs/images/comfyui-flashdepth-node-detail.png)
+
+### Synthetic proof subjects
+
+These project-owned synthetic sources are designed to expose failure modes that matter to upscaling and neural rendering: hair and cable edges, mesh, bicycle spokes, wet reflections, layered transparency, skin, fabric, perforated metal, and deep perspective. They are test inputs—not evidence that estimated passes equal native engine buffers.
+
+![Rainy city benchmark source](docs/images/benchmark-rainy-city-source.png)
+
+![Industrial corridor benchmark source](docs/images/benchmark-industrial-source.png)
+
 ## Quick start: still image
 
 Import [`workflows/01_still_image_guided_2x.json`](workflows/01_still_image_guided_2x.json).
@@ -207,7 +232,7 @@ For a single still, the neural runtime uses a duplicated initialization frame in
 
 ## Quick start: video
 
-Import [`workflows/02_video_persistent_2x.json`](workflows/02_video_persistent_2x.json).
+Import [`workflows/04_video_vda_small_temporal_2x.json`](workflows/04_video_vda_small_temporal_2x.json) for the recommended temporally consistent depth path. Workflow 02 remains the lighter framewise fallback.
 
 Recommended guide chain:
 
@@ -268,6 +293,14 @@ Runs SR followed by neural rendering. `processing_mode` selects persistent or bo
 
 Downloads and runs a Hugging Face Depth Anything V2 model. `temporal_normalization` uses one normalization range for the sequence, reducing framewise scale pumping.
 
+### Video Depth Anything (Temporal)
+
+Downloads the official Apache-2.0 VDA-S implementation and weights on first use. It evaluates 32-frame temporal windows with upstream overlap alignment. Use `518 (best)` when supported, `392 (fast)` for normal previews, or `280 (compatible)` when a newly released GPU lacks a compatible xFormers kernel. The node automatically uses PyTorch scaled-dot-product attention on post-Ada GPU architectures.
+
+### FlashDepth (External, Optional)
+
+Runs the official FlashDepth inference entry point in a separate Python environment. **Full** is intended for high-resolution/2K footage; upstream recommends **L** below roughly 518 pixels on the short side. See [FlashDepth setup](docs/FLASHDEPTH.md). This backend is optional and was not added to ComfyUI's dependency list.
+
 ### RAFT Motion Guide
 
 Computes dense **current-to-previous** optical flow for temporal reprojection. R/G encode X/Y; 0.5 means zero motion.
@@ -285,6 +318,8 @@ Reports resolved Python, wrapper, and runtime paths. Redact personal directory n
 The first guide-model run may access the internet:
 
 - Depth Anything V2: <https://huggingface.co/depth-anything>
+- Video Depth Anything Small: <https://huggingface.co/depth-anything/Video-Depth-Anything-Small>
+- FlashDepth (optional): <https://huggingface.co/Eyeline-Labs/FlashDepth>
 - TorchVision RAFT: <https://pytorch.org/vision/stable/models/raft.html>
 
 Weights are cached by Hugging Face and PyTorch. Review their model cards and licenses before redistribution or commercial deployment.

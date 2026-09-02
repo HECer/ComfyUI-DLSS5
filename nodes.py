@@ -998,6 +998,58 @@ class DLSS5DepthAnythingV2:
         return (depth.to(images.device),)
 
 
+class DLSS5VideoDepthAnything:
+    """Temporally consistent depth using the official Apache-2.0 VDA-S model."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "images": ("IMAGE",),
+                "input_size": (["280 (compatible)", "392 (fast)", "518 (best)"],),
+                "precision": (["FP16 (recommended)", "FP32"],),
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("temporally_consistent_depth",)
+    FUNCTION = "estimate"
+    CATEGORY = "image/NVIDIA DLSS 5/guides"
+
+    def estimate(self, images, input_size, precision):
+        from .video_depth_backend import infer_vda_small
+
+        size = int(input_size.split()[0])
+        depth = infer_vda_small(images, input_size=size, fp32=precision == "FP32")
+        return (depth,)
+
+
+class DLSS5FlashDepth:
+    """High-resolution FlashDepth through a conflict-free external environment."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "images": ("IMAGE",),
+                "variant": (["FlashDepth-L (low resolution)", "FlashDepth Full (2K)"],),
+                "flashdepth_python": ("STRING", {"default": ""}),
+                "flashdepth_repository": ("STRING", {"default": ""}),
+                "fps": ("FLOAT", {"default": 24.0, "min": 1.0, "max": 240.0}),
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("temporally_consistent_depth",)
+    FUNCTION = "estimate"
+    CATEGORY = "image/NVIDIA DLSS 5/guides/optional"
+
+    def estimate(self, images, variant, flashdepth_python, flashdepth_repository, fps):
+        from .video_depth_backend import infer_flashdepth_external
+
+        return (infer_flashdepth_external(images, variant, flashdepth_python, flashdepth_repository, fps),)
+
+
 class DLSS5RuntimeStatus:
     @classmethod
     def INPUT_TYPES(cls):
@@ -1066,6 +1118,8 @@ NODE_CLASS_MAPPINGS = {
     "DLSS5OpticalFlow": DLSS5OpticalFlow,
     "DLSS5RAFTFlow": DLSS5RAFTFlow,
     "DLSS5DepthAnythingV2": DLSS5DepthAnythingV2,
+    "DLSS5VideoDepthAnything": DLSS5VideoDepthAnything,
+    "DLSS5FlashDepth": DLSS5FlashDepth,
     "DLSS5TemporalDepthStabilize": DLSS5TemporalDepthStabilize,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -1078,5 +1132,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "DLSS5OpticalFlow": "DLSS 5 Optical Flow Guide",
     "DLSS5RAFTFlow": "DLSS 5 RAFT Motion Guide",
     "DLSS5DepthAnythingV2": "DLSS 5 Depth Anything V2 Guide",
+    "DLSS5VideoDepthAnything": "DLSS 5 Video Depth Anything (Temporal)",
+    "DLSS5FlashDepth": "DLSS 5 FlashDepth (External, Optional)",
     "DLSS5TemporalDepthStabilize": "DLSS 5 Temporal Depth Stabilizer",
 }

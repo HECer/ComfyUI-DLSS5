@@ -9,3 +9,13 @@
 The artwork contains no NVIDIA, DLSS, ComfyUI, or other third-party logo.
 
 The icon is project branding only. It does not imply affiliation with or endorsement by NVIDIA, ComfyUI, RenoDX, VapourKit, or OpenAI.
+
+## Synthetic benchmark sources
+
+`docs/images/benchmark-rainy-city-source.png` and `docs/images/benchmark-industrial-source.png` were generated specifically for this project's documentation with OpenAI image generation on 2026-09-02. They are synthetic test inputs selected for fine geometry, reflections, material detail, people, and strong depth layering; they are not game captures or claims of native engine output.
+
+Both PNG files contain a structurally detected `caBX` manifest-store chunk. A conforming C2PA verifier and named trust policy were unavailable, so cryptographic verification and signer trust remain unknown. The bounded metadata-privacy audit reported `NONE_OBSERVED` for supported privacy fields.
+
+## ComfyUI screenshots
+
+The four `comfyui-vda-*` and `comfyui-flashdepth-*` PNGs were captured from a local isolated ComfyUI 0.32.0 instance loading the published workflow JSON files. Their bounded metadata-privacy audits reported `NONE_OBSERVED`. Screenshots demonstrate graph layout and settings only; they are not inference-quality evidence.
