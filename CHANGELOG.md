@@ -7,6 +7,7 @@
 - Added a Manager-friendly one-click runtime installer with a pinned URL and SHA-256 verification; only `nvngx_dlssnr.dll` remains user-supplied.
 - Exposed runtime installation as a ComfyUI output node, so the recommended setup requires no terminal.
 - Replaced the previous documentation image with an Alyx comparison as the README hero.
+- Added full-size ComfyUI screenshots for the Easy and Advanced workflows, including readable node-detail views.
 
 ## 0.1.0-alpha
 

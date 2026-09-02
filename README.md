@@ -165,6 +165,30 @@ Add **Experimental DLSS — Easy Upscale & Render**, connect an `IMAGE` batch, a
 
 Choose `Upscale only`, `Neural rendering only`, or `Upscale + neural rendering`. The node automatically estimates and temporally stabilizes depth and creates current-to-previous motion guides, then runs only the selected stages. `Neutral / faithful` is the safest evaluation look. The Easy node favors practical defaults; use the standalone or Advanced nodes when you have engine-authored depth/motion or need exact controls.
 
+## ComfyUI workflow screenshots
+
+### Easy one-node workflow
+
+Import [`workflows/00_easy_one_node_2x.json`](workflows/00_easy_one_node_2x.json) for the recommended first run. Select an image, choose the scenario and operation in the central Easy node, then inspect or save the output. The graph keeps setup choices in one place while still exposing the generated image and runtime report.
+
+![Complete Easy ComfyUI workflow with Load Image, Experimental DLSS Easy Upscale and Render, Preview, and Save nodes](docs/images/comfyui-easy-workflow.png)
+
+The detailed view shows every Easy-node control: scenario, independent upscale/render operation, 2x–4x scale, DLSS quality preset, rendering look, and effect strength.
+
+![Detailed ComfyUI view of the Easy Upscale and Render node and its controls](docs/images/comfyui-easy-node-detail.png)
+
+### Advanced guided workflow
+
+Import [`workflows/01_still_image_guided_2x.json`](workflows/01_still_image_guided_2x.json) when you want direct control over guide generation and the native pipeline. Depth Anything V2 supplies depth, the motion-guide node supplies current-to-previous motion, and the full pipeline receives color, depth, and motion as separate inputs.
+
+![Complete advanced ComfyUI workflow with depth, motion, full DLSS pipeline, preview, and save stages](docs/images/comfyui-advanced-workflow.png)
+
+The close view makes the full-pipeline controls readable, including processing mode, history overlap, neural style, style strength, intensity, structure controls, automatic effects masking, and depth orientation.
+
+![Detailed ComfyUI view of the full DLSS SR and Neural Rendering node](docs/images/comfyui-advanced-node-detail.png)
+
+These screenshots show node layout and settings only; the placeholder image is bundled with ComfyUI and is not a quality result. See the Alyx comparison and persistent-video contact sheet above for representative output examples.
+
 ## Quick start: still image
 
 Import [`workflows/01_still_image_guided_2x.json`](workflows/01_still_image_guided_2x.json).
