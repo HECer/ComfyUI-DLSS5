@@ -19,3 +19,11 @@ Both PNG files contain a structurally detected `caBX` manifest-store chunk. A co
 ## ComfyUI screenshots
 
 The four `comfyui-vda-*` and `comfyui-flashdepth-*` PNGs were captured from a local isolated ComfyUI 0.32.0 instance loading the published workflow JSON files. Their bounded metadata-privacy audits reported `NONE_OBSERVED`. Screenshots demonstrate graph layout and settings only; they are not inference-quality evidence.
+
+## Runtime proof derivatives
+
+The files under `docs/images/proofs/` derive from the two synthetic benchmark sources above. They were created locally on 2026-09-02 with the user-supplied NVIDIA runtime through the same VapourSynth bridges used by the ComfyUI nodes. The included `runtime-reports.txt` files record the reported runtime feature, dimensions, guides, and SR preset.
+
+The overview sheets resize panels proportionally. The detail sheets enlarge 1× crops by an exact 2× using nearest-neighbor sampling and place them beside native 2× output crops. Neither sheet changes an image's aspect ratio.
+
+The runtime derivatives and comparison sheets do not retain the source PNG's structural C2PA marker. A full scan of both JPEG overview sheets found no supported provenance carrier. This absence does not identify the author or prove human authorship; the human-readable record above links the derivatives to their generated sources.

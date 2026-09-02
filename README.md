@@ -210,13 +210,49 @@ The optional [`workflows/05_video_flashdepth_highres_2x.json`](workflows/05_vide
 
 ![Detailed optional FlashDepth node in ComfyUI](docs/images/comfyui-flashdepth-node-detail.png)
 
-### Synthetic proof subjects
+### Tested still-image variants
 
-These project-owned synthetic sources are designed to expose failure modes that matter to upscaling and neural rendering: hair and cable edges, mesh, bicycle spokes, wet reflections, layered transparency, skin, fabric, perforated metal, and deep perspective. They are test inputs—not evidence that estimated passes equal native engine buffers.
+The two synthetic sources were processed through the local NVIDIA runtime. Each test produced six files:
 
-![Rainy city benchmark source](docs/images/benchmark-rainy-city-source.png)
+1. Original at 1672×941
+2. Neural Rendering only, neutral style, at 1672×941
+3. Neural Rendering only, style 2, at 1672×941
+4. DLSS Super Resolution only, Performance preset, at 3344×1882
+5. 2× DLSS SR followed by neutral Neural Rendering at 3344×1882
+6. 2× DLSS SR followed by style 2 Neural Rendering at 3344×1882
 
-![Industrial corridor benchmark source](docs/images/benchmark-industrial-source.png)
+The runtime reports identify Neural Rendering as `DLSS-NR 310.8`, Feature 18, with depth and motion guides. The SR stage reports an exact 1672×941 to 3344×1882 conversion. A still image is duplicated internally to initialize the temporal runtime; these tests do not measure video stability.
+
+#### Rainy city
+
+This image tests wet hair, skin, bicycle spokes, chain-link fencing, tram wires, foliage, masonry, small lights, and reflected highlights. Style 2 changes facial contrast and local surface structure more strongly than the neutral setting. The 2× files retain more pixels around the fence, spokes, hair, and distant windows.
+
+![Rainy city original and five tested runtime variants](docs/images/proofs/rainy-city/00-comparison.jpg)
+
+![Rainy city center crops at display-matched scale](docs/images/proofs/rainy-city/00-detail-comparison.jpg)
+
+[Open the full-resolution rainy-city files](docs/images/proofs/rainy-city/)
+
+#### Industrial corridor
+
+This image tests perforated panels, visor edges, cables, fabric, scratched metal, steam, small background objects, and a long central perspective. The styled variants change the face and clothing most visibly. The 2× outputs make the dense cable and panel structure easier to inspect at native resolution.
+
+![Industrial corridor original and five tested runtime variants](docs/images/proofs/industrial-corridor/00-comparison.jpg)
+
+![Industrial corridor center crops at display-matched scale](docs/images/proofs/industrial-corridor/00-detail-comparison.jpg)
+
+[Open the full-resolution industrial-corridor files](docs/images/proofs/industrial-corridor/)
+
+The overview sheets resize every panel proportionally. The detail sheets compare the same center region: 1× crops are enlarged by an exact 2× with nearest-neighbor sampling, while SR crops are shown at their native 2× size. No panel changes the source aspect ratio.
+
+Measured mean absolute pixel differences:
+
+| Test | NR neutral vs. original | NR style 2 vs. original | 2× SR + neutral NR vs. 2× SR | 2× SR + style 2 NR vs. 2× SR |
+| --- | ---: | ---: | ---: | ---: |
+| Rainy city | 0.0274 | 0.0264 | 0.0224 | 0.0213 |
+| Industrial corridor | 0.0260 | 0.0261 | 0.0243 | 0.0283 |
+
+These values measure how many pixels changed, not whether the change is better. Judge faces, thin edges, reflections, and distant detail in the full-resolution files. Pixel-estimated depth and zero motion for a still cannot reproduce the native buffers available inside a game engine.
 
 ## Quick start: still image
 

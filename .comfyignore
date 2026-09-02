@@ -11,3 +11,4 @@ runtime/*
 *.zip
 *.7z
 docs/images/icon-source.png
+docs/images/proofs/**/*.png
