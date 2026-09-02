@@ -8,6 +8,7 @@
 - Exposed runtime installation as a ComfyUI output node, so the recommended setup requires no terminal.
 - Replaced the previous documentation image with an Alyx comparison as the README hero.
 - Added full-size ComfyUI screenshots for the Easy and Advanced workflows, including readable node-detail views.
+- Added the official GitHub Actions publishing workflow for Comfy Registry and ComfyUI Manager distribution.
 
 ## 0.1.0-alpha
 
