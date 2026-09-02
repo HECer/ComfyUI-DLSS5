@@ -16,6 +16,12 @@ The icon is project branding only. It does not imply affiliation with or endorse
 
 Both PNG files contain a structurally detected `caBX` manifest-store chunk. A conforming C2PA verifier and named trust policy were unavailable, so cryptographic verification and signer trust remain unknown. The bounded metadata-privacy audit reported `NONE_OBSERVED` for supported privacy fields.
 
+`docs/images/benchmark-gordon-freeman-source.png` was generated for the face test with OpenAI image generation on 2026-09-02. It depicts the copyrighted Gordon Freeman character as a deliberately low-quality game-style render. Valve did not create or endorse this synthetic image.
+
+`docs/images/benchmark-alyx-source.jpg` was supplied by the project owner as an existing test image. This repository does not claim authorship or ownership of the underlying Half-Life character or game artwork. It is included to document the exact input used for the comparison.
+
+The Gordon PNG contains a structurally detected `caBX` manifest-store chunk. Cryptographic verification and signer trust remain unknown because no conforming verifier or named trust policy was available. The Alyx JPEG contains no supported provenance carrier in the bounded scan. Absence of a carrier does not establish authorship. Neither source exposed supported privacy metadata in the bounded audit.
+
 ## ComfyUI screenshots
 
 The four `comfyui-vda-*` and `comfyui-flashdepth-*` PNGs were captured from a local isolated ComfyUI 0.32.0 instance loading the published workflow JSON files. Their bounded metadata-privacy audits reported `NONE_OBSERVED`. Screenshots demonstrate graph layout and settings only; they are not inference-quality evidence.

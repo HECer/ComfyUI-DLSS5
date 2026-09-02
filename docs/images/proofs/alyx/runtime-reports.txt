@@ -1,0 +1,9 @@
+DLSS-NR 310.8 Feature 18; 1200x800; 2 frame(s); temporal=yes; guides=depth+motion
+
+DLSS-NR 310.8 Feature 18; 1200x800; 2 frame(s); temporal=yes; guides=depth+motion
+
+Official NVIDIA DLSS Super Resolution; 1200x800 -> 2400x1600; scale=2x; quality=Performance; guides=depth+motion
+
+DLSS-NR 310.8 Feature 18; 2400x1600; 2 frame(s); temporal=yes; guides=depth+motion
+
+DLSS-NR 310.8 Feature 18; 2400x1600; 2 frame(s); temporal=yes; guides=depth+motion

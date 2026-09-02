@@ -214,14 +214,34 @@ The optional [`workflows/05_video_flashdepth_highres_2x.json`](workflows/05_vide
 
 The two synthetic sources were processed through the local NVIDIA runtime. Each test produced six files:
 
-1. Original at 1672×941
-2. Neural Rendering only, neutral style, at 1672×941
-3. Neural Rendering only, style 2, at 1672×941
-4. DLSS Super Resolution only, Performance preset, at 3344×1882
-5. 2× DLSS SR followed by neutral Neural Rendering at 3344×1882
-6. 2× DLSS SR followed by style 2 Neural Rendering at 3344×1882
+1. Original at source resolution
+2. Neural Rendering only, neutral style, at source resolution
+3. Neural Rendering only, style 2, at source resolution
+4. DLSS Super Resolution only, Performance preset, at 2× resolution
+5. 2× DLSS SR followed by neutral Neural Rendering
+6. 2× DLSS SR followed by style 2 Neural Rendering
 
-The runtime reports identify Neural Rendering as `DLSS-NR 310.8`, Feature 18, with depth and motion guides. The SR stage reports an exact 1672×941 to 3344×1882 conversion. A still image is duplicated internally to initialize the temporal runtime; these tests do not measure video stability.
+The runtime reports identify Neural Rendering as `DLSS-NR 310.8`, Feature 18, with depth and motion guides. A still image is duplicated internally to initialize the temporal runtime; these tests do not measure video stability.
+
+#### Gordon Freeman face test
+
+The source mimics an early-2000s low-poly game render. Its flat skin, angular jaw, blocky hair, painted beard, and jagged glasses give the runtime obvious defects to work with. Neutral Neural Rendering adds skin variation and softens hard transitions around the nose, cheeks, lips, and eyes. Style 2 preserves more of the source's flat shading. DLSS SR doubles the image from 1672×941 to 3344×1882 without changing its framing.
+
+![Gordon Freeman original and five tested runtime variants](docs/images/proofs/gordon-freeman/00-comparison.jpg)
+
+![Gordon Freeman face comparison with display-matched crops](docs/images/proofs/gordon-freeman/00-face-comparison.jpg)
+
+[Open the full-resolution Gordon Freeman files](docs/images/proofs/gordon-freeman/)
+
+#### Alyx face test
+
+The Alyx source is a 1200×800 game image supplied for testing. The face has limited skin texture, simple hair, hard clothing edges, and older real-time shading. Neutral Neural Rendering adds restrained facial texture. Style 2 changes the cheeks, lips, eyes, and neck more strongly. DLSS SR produces a 2400×1600 image before the combined NR passes.
+
+![Alyx original and five tested runtime variants](docs/images/proofs/alyx/00-comparison.jpg)
+
+![Alyx face comparison with display-matched crops](docs/images/proofs/alyx/00-face-comparison.jpg)
+
+[Open the full-resolution Alyx files](docs/images/proofs/alyx/)
 
 #### Rainy city
 
@@ -251,6 +271,8 @@ Measured mean absolute pixel differences:
 | --- | ---: | ---: | ---: | ---: |
 | Rainy city | 0.0274 | 0.0264 | 0.0224 | 0.0213 |
 | Industrial corridor | 0.0260 | 0.0261 | 0.0243 | 0.0283 |
+| Gordon Freeman | 0.0364 | 0.0185 | 0.0272 | 0.0164 |
+| Alyx | 0.0293 | 0.0478 | 0.0217 | 0.0361 |
 
 These values measure how many pixels changed, not whether the change is better. Judge faces, thin edges, reflections, and distant detail in the full-resolution files. Pixel-estimated depth and zero motion for a still cannot reproduce the native buffers available inside a game engine.
 
