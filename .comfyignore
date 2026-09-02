@@ -10,3 +10,4 @@ runtime/*
 *.exe
 *.zip
 *.7z
+docs/images/icon-source.png

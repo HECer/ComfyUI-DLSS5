@@ -1,5 +1,9 @@
 # Experimental DLSS Neural Rendering for ComfyUI
 
+<p align="center">
+  <img src="docs/images/icon.png" width="180" alt="Experimental DLSS Neural Rendering project icon">
+</p>
+
 An unofficial Windows-only ComfyUI extension that connects image and video batches to NVIDIA DLSS Super Resolution and an experimental DLSS Neural Rendering runtime through VapourSynth/D3D12 wrappers.
 
 > [!IMPORTANT]

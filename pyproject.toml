@@ -1,6 +1,6 @@
 [project]
 name = "experimental-dlss-neural-rendering"
-version = "0.1.0"
+version = "0.1.1"
 description = "Experimental Windows bridge for NVIDIA DLSS Super Resolution and neural rendering in ComfyUI."
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
@@ -28,3 +28,4 @@ Documentation = "https://github.com/HECer/ComfyUI-DLSS5#readme"
 [tool.comfy]
 PublisherId = "hecer"
 DisplayName = "Experimental DLSS Neural Rendering"
+Icon = "https://raw.githubusercontent.com/HECer/ComfyUI-DLSS5/main/docs/images/icon.png"
