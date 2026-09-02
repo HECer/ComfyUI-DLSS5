@@ -26,5 +26,5 @@ Documentation = "https://github.com/HECer/ComfyUI-DLSS5#readme"
 "Bug Tracker" = "https://github.com/HECer/ComfyUI-DLSS5/issues"
 
 [tool.comfy]
-PublisherId = "HECer"
+PublisherId = "hecer"
 DisplayName = "Experimental DLSS Neural Rendering"
