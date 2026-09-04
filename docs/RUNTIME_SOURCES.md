@@ -38,14 +38,14 @@ These weights are fetched automatically on first use. For offline systems, downl
 
 ## Optional DLSS Frame Generation backend
 
-The Frame Generation nodes use a separately installed `dlssg-worker.exe` and
-`nvngx_dlssg.dll` in `runtime/dlssg/`. The binary protocol follows the public Python
-client in [Merserk/dlss5-visual-enhancer](https://github.com/Merserk/dlss5-visual-enhancer),
-which is MIT-licensed. Its release documentation identifies the worker as a project-built
-binary, but the native worker source is not present in that repository. This extension
-therefore does not download, copy, or redistribute the worker.
+The Frame Generation nodes use `dlssg-worker.exe` from the MIT-licensed
+[HECer/DLSSG-Stream-Worker](https://github.com/HECer/DLSSG-Stream-Worker) and a
+separately supplied `nvngx_dlssg.dll`. The worker repository contains the full
+C++ source, protocol specification, CMake build, Windows CI, and tagged releases.
+The runtime installer downloads release v0.1.0 and checks its pinned SHA-256 before
+use.
 
-- Reference client and releases: <https://github.com/Merserk/dlss5-visual-enhancer/releases>
+- Open-source worker release: <https://github.com/HECer/DLSSG-Stream-Worker/releases/tag/v0.1.0>
 - Official NVIDIA Streamline DLSS-G integration guide: <https://github.com/NVIDIA-RTX/Streamline/blob/main/docs/ProgrammingGuideDLSS_G.md>
 
 Obtain NVIDIA components from an official SDK, driver, or licensed application source.

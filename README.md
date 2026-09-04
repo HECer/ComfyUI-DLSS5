@@ -310,7 +310,7 @@ Start with a short clip. Confirm frame count, FPS, dimensions, and available tem
 
 Import [`workflows/06_video_dlssg_24_to_48.json`](workflows/06_video_dlssg_24_to_48.json). It estimates current-to-previous motion with RAFT and inserts one generated frame between each pair of source frames. The example is configured for 24 to 48 fps; change both the node's input FPS and the encoder FPS when your source differs.
 
-Frame Generation uses an external worker that is not distributed with this repository. Put `dlssg-worker.exe` and a compatible `nvngx_dlssg.dll` together in `runtime/dlssg/`. See [runtime sources](docs/RUNTIME_SOURCES.md) before downloading or executing third-party binaries.
+Frame Generation uses the open-source [DLSS-G Stream Worker](https://github.com/HECer/DLSSG-Stream-Worker). The runtime installer downloads its pinned release and verifies the SHA-256 hash. You still need to place a compatible, legally obtained `nvngx_dlssg.dll` beside it in `runtime/dlssg/`. See [runtime sources](docs/RUNTIME_SOURCES.md) before installing native binaries.
 
 ![Complete DLSS Frame Generation workflow in ComfyUI](docs/images/comfyui-dlssg-workflow.png)
 
@@ -393,7 +393,7 @@ Interpolates an IMAGE batch at 2x, 3x, or 4x frame rate. It consumes the encoded
 
 `runtime_fallback` fails by default if the worker omits generated frames. The optional hold mode preserves duration by duplicating the preceding source frame, but it can produce visible judder and should not be mistaken for successful interpolation.
 
-This node is an optional integration with an external native worker. The worker source and redistribution terms are not supplied by this project, so the executable and compatible NVIDIA runtime must be installed manually.
+This node uses a separately released MIT-licensed native worker whose complete source and reproducible Windows build are public. The installer can download the pinned worker automatically. The compatible NVIDIA runtime remains a manual installation and is never distributed by this project.
 
 ### DLSS Frame Generation Runtime Status
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.1 — 2026-09-04
+
+- Replaced the undocumented Frame Generation worker recommendation with the
+  open-source [HECer/DLSSG-Stream-Worker](https://github.com/HECer/DLSSG-Stream-Worker).
+- Added a pinned, SHA-256-verified worker download to the runtime installer.
+- Kept `nvngx_dlssg.dll` manual and outside the extension package.
+- Validated the new worker through the existing RTX 5090 ComfyUI integration test.
+
 ## 0.3.0 — 2026-09-04
 
 - Added optional DLSS Frame Generation and capability-status nodes.

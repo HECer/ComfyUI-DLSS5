@@ -1,6 +1,6 @@
 [project]
 name = "experimental-dlss-neural-rendering"
-version = "0.3.0"
+version = "0.3.1"
 description = "Experimental Windows bridge for NVIDIA DLSS Super Resolution, neural rendering, and Frame Generation in ComfyUI."
 readme = "README.md"
 requires-python = ">=3.10,<3.14"

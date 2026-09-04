@@ -10,22 +10,23 @@ For the simplest installation:
 3. Select `Install verified VapourKit`, enable its confirmation control, and queue the setup node again.
 4. Restart ComfyUI and check the Runtime Status node.
 
-The one-click installer downloads only the pinned VapourKit nightly, verifies its SHA-256, and writes `config.json`. Downloaded and extracted runtime files remain ignored by Git and the Registry package.
+The one-click installer downloads the pinned VapourKit nightly and the open-source
+DLSS-G worker, verifies both SHA-256 hashes, and writes `config.json`. Downloaded
+and extracted runtime files remain ignored by Git and the Registry package.
 
 Never commit NVIDIA DLLs, patched DLLs, executables, API keys, or machine-specific `config.json` files.
 
 ## Optional DLSS Frame Generation
 
-Frame Generation uses an external native worker. Put these two matching files in
+Frame Generation uses the open-source native worker from
+<https://github.com/HECer/DLSSG-Stream-Worker>. Put these two matching files in
 `runtime/dlssg/`:
 
 - `dlssg-worker.exe`
 - `nvngx_dlssg.dll`
 
-The extension does not download or distribute either file. The worker protocol is
-compatible with the public Python client in
-<https://github.com/Merserk/dlss5-visual-enhancer>. Its native worker source is not
-part of that repository, so verify the binary and confirm your right to use it.
-The reference project's downloads are listed at
-<https://github.com/Merserk/dlss5-visual-enhancer/releases>.
+`install_runtime.py` downloads the pinned worker release and verifies its SHA-256
+hash. The extension does not download or distribute `nvngx_dlssg.dll`; copy that
+file manually from software you legally obtained. Source, build instructions, and
+the wire protocol are published with the worker repository.
 Run **DLSS Frame Generation Runtime Status** before processing a video.
