@@ -17,6 +17,7 @@ An unofficial Windows-only ComfyUI extension that connects image and video batch
 
 - Runs NVIDIA DLSS Super Resolution at 2x, 3x, or 4x.
 - Runs the experimental neural rendering pass exposed by a user-supplied `nvngx_dlssnr.dll`.
+- Optionally runs NVIDIA DLSS Frame Generation through a separately supplied native worker and `nvngx_dlssg.dll`.
 - Accepts depth and dense motion-vector guides.
 - Includes Depth Anything V2, temporally consistent Video Depth Anything Small, and RAFT guide nodes.
 - Offers FlashDepth as an isolated, optional high-resolution video-depth backend.
@@ -34,6 +35,7 @@ This is an **experimental alpha release**. It was locally validated on Windows w
 Known limitations:
 
 - Windows and NVIDIA D3D12 only.
+- The optional Frame Generation path targets Windows 11 and a supported RTX 40- or 50-series GPU. Upstream recommends HAGS; the status node reports its registry state because behavior can vary by driver and worker build.
 - Runtime compatibility depends on the exact NVIDIA DLL, driver, GPU, and wrapper build.
 - `Persistent full sequence` removes native chunk resets but ComfyUI still owns the full IMAGE batch.
 - Long films should use `Bounded overlap-add` until a file-to-file streaming node is released.
@@ -304,6 +306,20 @@ Video frames
 
 Start with a short clip. Confirm frame count, FPS, dimensions, and available temporary storage before processing longer sequences.
 
+### Optional: DLSS Frame Generation
+
+Import [`workflows/06_video_dlssg_24_to_48.json`](workflows/06_video_dlssg_24_to_48.json). It estimates current-to-previous motion with RAFT and inserts one generated frame between each pair of source frames. The example is configured for 24 to 48 fps; change both the node's input FPS and the encoder FPS when your source differs.
+
+Frame Generation uses an external worker that is not distributed with this repository. Put `dlssg-worker.exe` and a compatible `nvngx_dlssg.dll` together in `runtime/dlssg/`. See [runtime sources](docs/RUNTIME_SOURCES.md) before downloading or executing third-party binaries.
+
+![Complete DLSS Frame Generation workflow in ComfyUI](docs/images/comfyui-dlssg-workflow.png)
+
+*Complete 24-to-48 fps path: video input, RAFT motion, DLSS-G, runtime check, and encoding.*
+
+![Detailed DLSS Frame Generation and output settings in ComfyUI](docs/images/comfyui-dlssg-node-detail.png)
+
+*The detail view shows the tested 2x preset, source FPS, scene-cut threshold, fail-fast behavior, and matching 48 fps encoder setting.*
+
 ## Processing modes
 
 ### Persistent full sequence
@@ -370,6 +386,18 @@ Warps the previous stabilized depth into the current frame with RAFT motion, the
 ### Runtime Status
 
 Reports resolved Python, wrapper, and runtime paths. Redact personal directory names before posting it publicly.
+
+### NVIDIA DLSS Frame Generation (External Worker)
+
+Interpolates an IMAGE batch at 2x, 3x, or 4x frame rate. It consumes the encoded current-to-previous motion produced by `RAFT Motion Guide`, keeps one worker process alive for the sequence, and resets temporal history at detected scene cuts. The output contains `(input_frames - 1) × multiplier + 1` frames, so its duration matches the source when encoded at `input_fps × multiplier`. Multi-frame 3x/4x operation depends on HAGS, GPU, driver, runtime, and worker support; 2x is the safest starting point.
+
+`runtime_fallback` fails by default if the worker omits generated frames. The optional hold mode preserves duration by duplicating the preceding source frame, but it can produce visible judder and should not be mistaken for successful interpolation.
+
+This node is an optional integration with an external native worker. The worker source and redistribution terms are not supplied by this project, so the executable and compatible NVIDIA runtime must be installed manually.
+
+### DLSS Frame Generation Runtime Status
+
+Checks the external worker, runtime DLL, probe response, and Windows HAGS state without processing a video.
 
 ## Models and downloads
 

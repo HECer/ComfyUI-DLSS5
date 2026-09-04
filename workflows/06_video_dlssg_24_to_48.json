@@ -1,0 +1,104 @@
+{
+  "last_node_id": 5,
+  "last_link_id": 4,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "VHS_LoadVideo",
+      "title": "STEP 1 — Load a short 24 fps test clip",
+      "pos": [20, 180],
+      "size": [340, 610],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {"name": "IMAGE", "type": "IMAGE", "links": [1, 2], "slot_index": 0},
+        {"name": "frame_count", "type": "INT", "links": null},
+        {"name": "audio", "type": "AUDIO", "links": null},
+        {"name": "video_info", "type": "VHS_VIDEOINFO", "links": null}
+      ],
+      "properties": {"Node name for S&R": "VHS_LoadVideo", "Node note": "This example assumes constant 24 fps. Start with 1–2 seconds."},
+      "widgets_values": {"video": "example.mp4", "force_rate": 0, "force_size": "Disabled", "custom_width": 0, "custom_height": 0, "frame_load_cap": 0, "skip_first_frames": 0, "select_every_nth": 1}
+    },
+    {
+      "id": 2,
+      "type": "DLSS5RAFTFlow",
+      "title": "STEP 2 — Estimate backward motion",
+      "pos": [420, 230],
+      "size": [360, 170],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {"name": "images", "type": "IMAGE", "link": 1}
+      ],
+      "outputs": [{"name": "motion_vectors", "type": "IMAGE", "links": [3], "slot_index": 0}],
+      "properties": {"Node name for S&R": "DLSS5RAFTFlow", "Node note": "R/G encode current-to-previous X/Y motion. The Frame Generation node converts it to pixel units."},
+      "widgets_values": ["RAFT Large (best)", 2]
+    },
+    {
+      "id": 3,
+      "type": "DLSSFrameGeneration",
+      "title": "STEP 3 — Generate one frame between sources",
+      "pos": [850, 180],
+      "size": [440, 300],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {"name": "images", "type": "IMAGE", "link": 2},
+        {"name": "motion_vectors", "type": "IMAGE", "link": 3}
+      ],
+      "outputs": [
+        {"name": "images", "type": "IMAGE", "links": [4], "slot_index": 0},
+        {"name": "output_fps", "type": "FLOAT", "links": null},
+        {"name": "runtime_report", "type": "STRING", "links": null}
+      ],
+      "properties": {"Node name for S&R": "DLSSFrameGeneration", "Node note": "Requires runtime/dlssg/dlssg-worker.exe and nvngx_dlssg.dll. Scene cuts duplicate the preceding source frame instead of interpolating across the cut."},
+      "widgets_values": ["2x", 24.0, 0.28, "Fail on missing frames (recommended)"]
+    },
+    {
+      "id": 4,
+      "type": "VHS_VideoCombine",
+      "title": "STEP 4 — Encode at 48 fps",
+      "pos": [1370, 170],
+      "size": [430, 450],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [{"name": "images", "type": "IMAGE", "link": 4}],
+      "outputs": [{"name": "Filenames", "type": "VHS_FILENAMES", "links": null}],
+      "properties": {"Node name for S&R": "VHS_VideoCombine", "Node note": "Encoder FPS must equal input_fps × multiplier. This example uses 24 × 2 = 48."},
+      "widgets_values": {"frame_rate": 48, "loop_count": 0, "filename_prefix": "DLSS5/video-dlssg-24-to-48", "format": "video/h264-mp4", "pix_fmt": "yuv420p", "crf": 18, "save_metadata": true, "trim_to_audio": false, "pingpong": false, "save_output": true}
+    },
+    {
+      "id": 5,
+      "type": "DLSSFrameGenerationStatus",
+      "title": "CHECK FIRST — DLSS-G runtime and HAGS",
+      "pos": [850, 560],
+      "size": [440, 130],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [{"name": "status", "type": "STRING", "links": null}],
+      "properties": {"Node name for S&R": "DLSSFrameGenerationStatus", "Node note": "Run this before inference. A successful probe does not guarantee that every driver/runtime combination will initialize."},
+      "widgets_values": []
+    }
+  ],
+  "links": [
+    [1, 1, 0, 2, 0, "IMAGE"],
+    [2, 1, 0, 3, 0, "IMAGE"],
+    [3, 2, 0, 3, 1, "IMAGE"],
+    [4, 3, 0, 4, 0, "IMAGE"]
+  ],
+  "groups": [
+    {"title": "MOTION — estimated from pixels", "bounding": [390, 180, 420, 280], "color": "#3f789e", "font_size": 24},
+    {"title": "DLSS-G — external runtime, test short clips first", "bounding": [820, 120, 500, 610], "color": "#6f5630", "font_size": 24},
+    {"title": "OUTPUT — keep duration by multiplying FPS", "bounding": [1340, 110, 500, 550], "color": "#486b33", "font_size": 24}
+  ],
+  "config": {},
+  "extra": {"ds": {"scale": 0.72, "offset": [20, 70]}, "release_notes": ["Requires ComfyUI-VideoHelperSuite for loading and encoding.", "The worker and NVIDIA runtime are user-supplied and are not redistributed.", "The example assumes constant 24 fps and writes 48 fps output.", "Pixel-estimated RAFT flow is less accurate than native game-engine motion vectors."]},
+  "version": 0.4
+}

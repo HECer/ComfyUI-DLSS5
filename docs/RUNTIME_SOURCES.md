@@ -36,6 +36,24 @@ At the time of this release, we did not identify a generally available official 
 
 These weights are fetched automatically on first use. For offline systems, download them through the respective Hugging Face/PyTorch mechanisms on a connected machine and transfer the caches in accordance with their licenses.
 
+## Optional DLSS Frame Generation backend
+
+The Frame Generation nodes use a separately installed `dlssg-worker.exe` and
+`nvngx_dlssg.dll` in `runtime/dlssg/`. The binary protocol follows the public Python
+client in [Merserk/dlss5-visual-enhancer](https://github.com/Merserk/dlss5-visual-enhancer),
+which is MIT-licensed. Its release documentation identifies the worker as a project-built
+binary, but the native worker source is not present in that repository. This extension
+therefore does not download, copy, or redistribute the worker.
+
+- Reference client and releases: <https://github.com/Merserk/dlss5-visual-enhancer/releases>
+- Official NVIDIA Streamline DLSS-G integration guide: <https://github.com/NVIDIA-RTX/Streamline/blob/main/docs/ProgrammingGuideDLSS_G.md>
+
+Obtain NVIDIA components from an official SDK, driver, or licensed application source.
+Keep the worker and its matching runtime together, record their SHA-256 hashes, and run
+the capability-status node before processing media. The upstream integration targets
+Windows 11, Direct3D 12, a supported RTX 40- or 50-series GPU, and a compatible driver;
+it also recommends Hardware-accelerated GPU scheduling.
+
 ## Optional video workflow dependency
 
 - ComfyUI-VideoHelperSuite: <https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite>

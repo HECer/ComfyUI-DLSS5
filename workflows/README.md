@@ -26,4 +26,16 @@ Recommended video workflow. It replaces framewise depth plus post-stabilization 
 
 Optional expert workflow for high-resolution footage. FlashDepth runs in an isolated Torch 2.4 environment so it cannot alter ComfyUI's CUDA stack. Complete [`docs/FLASHDEPTH.md`](../docs/FLASHDEPTH.md) before queueing it.
 
+## 06 — DLSS Frame Generation 2x
+
+Loads a video as an image batch, calculates current-to-previous RAFT motion, and inserts
+one DLSS-G frame between consecutive source frames. Set both the DLSS-G node and encoder
+to the correct source and output rates. The included example uses 24 to 48 fps.
+
+This workflow requires the optional external files documented in
+[`runtime/README.md`](../runtime/README.md). Test the status node first. Hard scene cuts
+reset DLSS-G history and hold the preceding source frame to preserve duration.
+Missing runtime output fails the workflow by default; use the hold fallback only when
+you deliberately prefer constant duration over smooth interpolation.
+
 All workflows contain explanatory node titles, group labels, and machine-readable notes in `extra.release_notes` or `notes`.

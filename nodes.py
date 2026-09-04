@@ -5,10 +5,25 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+from fractions import Fraction
 
 import numpy as np
 import torch
 import torch.nn.functional as F
+
+try:
+    from .dlssg_backend import DLSSGSession, hags_enabled, probe_worker
+except ImportError:
+    import importlib.util
+
+    _DLSSG_SPEC = importlib.util.spec_from_file_location(
+        "dlssg_backend", Path(__file__).resolve().with_name("dlssg_backend.py")
+    )
+    _DLSSG_MODULE = importlib.util.module_from_spec(_DLSSG_SPEC)
+    _DLSSG_SPEC.loader.exec_module(_DLSSG_MODULE)
+    DLSSGSession = _DLSSG_MODULE.DLSSGSession
+    hags_enabled = _DLSSG_MODULE.hags_enabled
+    probe_worker = _DLSSG_MODULE.probe_worker
 
 
 PACKAGE = Path(__file__).resolve().parent
@@ -312,6 +327,188 @@ def _sr_runtime_paths() -> tuple[Path, Path, Path]:
             "DLSS Super Resolution runtime missing: " + ", ".join(missing)
         )
     return python, plugin, runtime
+
+
+def _dlssg_runtime_paths() -> tuple[Path, Path]:
+    config = _runtime_config()
+    worker_value = os.environ.get("DLSS5_DLSSG_WORKER") or config.get("dlssg_worker")
+    runtime_value = os.environ.get("DLSS5_DLSSG_RUNTIME") or config.get("dlssg_runtime")
+    worker = _first_existing(
+        ([Path(worker_value)] if worker_value else [])
+        + [PACKAGE / "runtime" / "dlssg" / "dlssg-worker.exe"]
+    )
+    runtime = _first_existing(
+        ([Path(runtime_value)] if runtime_value else [])
+        + [PACKAGE / "runtime" / "dlssg" / "nvngx_dlssg.dll"]
+    )
+    missing = [
+        name
+        for name, path in (("dlssg-worker.exe", worker), ("nvngx_dlssg.dll", runtime))
+        if path is None
+    ]
+    if missing:
+        raise RuntimeError(
+            "DLSS Frame Generation runtime missing: "
+            + ", ".join(missing)
+            + f". Place both files in {PACKAGE / 'runtime' / 'dlssg'}"
+        )
+    if worker.parent.resolve() != runtime.parent.resolve():
+        raise RuntimeError("dlssg-worker.exe and nvngx_dlssg.dll must share one directory")
+    return worker, runtime
+
+
+def _dlssg_motion_pixels(motion_vectors: torch.Tensor, size: tuple[int, int]) -> np.ndarray:
+    height, width = size
+    motion = F.interpolate(
+        motion_vectors.detach().cpu().float().permute(0, 3, 1, 2)[:, :2],
+        size=size,
+        mode="bilinear",
+        align_corners=False,
+    )
+    motion = (motion - 0.5) * 2.0
+    motion[:, 0] *= width
+    motion[:, 1] *= height
+    return motion.permute(0, 2, 3, 1).numpy().astype(np.float16, copy=False)
+
+
+def _dlssg_scene_resets(images: torch.Tensor, threshold: float) -> list[bool]:
+    source = images.detach().cpu().float()
+    resets = [True]
+    for index in range(1, len(source)):
+        score = torch.mean(torch.abs(source[index] - source[index - 1])).item()
+        resets.append(score >= threshold)
+    return resets
+
+
+class DLSSFrameGeneration:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "images": ("IMAGE",),
+                "motion_vectors": ("IMAGE",),
+                "multiplier": (["2x", "3x", "4x"],),
+                "input_fps": (
+                    "FLOAT",
+                    {"default": 24.0, "min": 1.0, "max": 240.0, "step": 0.001},
+                ),
+                "scene_cut_threshold": (
+                    "FLOAT",
+                    {"default": 0.28, "min": 0.01, "max": 1.0, "step": 0.01},
+                ),
+                "runtime_fallback": (
+                    ["Fail on missing frames (recommended)", "Hold previous frame"],
+                ),
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE", "FLOAT", "STRING")
+    RETURN_NAMES = ("interpolated_frames", "output_fps", "runtime_report")
+    FUNCTION = "generate"
+    CATEGORY = "image/NVIDIA DLSS 5/video"
+
+    def generate(
+        self,
+        images,
+        motion_vectors,
+        multiplier,
+        input_fps,
+        scene_cut_threshold,
+        runtime_fallback="Fail on missing frames (recommended)",
+    ):
+        if images.shape[0] < 2:
+            raise ValueError("DLSS Frame Generation needs at least two input frames")
+        if motion_vectors.shape[0] != images.shape[0]:
+            raise ValueError("motion_vectors batch must match images")
+        worker, runtime = _dlssg_runtime_paths()
+        factor = int(multiplier[0])
+        generated_count = factor - 1
+        source = images.detach().cpu().float().clamp(0, 1)
+        height, width = source.shape[1:3]
+        rgba = np.empty((len(source), height, width, 4), dtype=np.uint8)
+        rgba[..., :3] = np.rint(source[..., :3].numpy() * 255.0).astype(np.uint8)
+        rgba[..., 3] = 255
+        motion = _dlssg_motion_pixels(motion_vectors, (height, width))
+        resets = _dlssg_scene_resets(source, float(scene_cut_threshold))
+        output = []
+        disabled_frames = 0
+        reset_fill_frames = 0
+        frame_rate = Fraction(str(float(input_fps))).limit_denominator(1_000_000)
+        with DLSSGSession(
+            worker,
+            runtime.parent,
+            width,
+            height,
+            len(source),
+            generated_count,
+        ) as session:
+            for index in range(len(source)):
+                generated = session.process_frame(
+                    rgba[index],
+                    motion[index],
+                    index * frame_rate.denominator,
+                    frame_rate.numerator,
+                    reset=resets[index],
+                )
+                if index == 0:
+                    output.append(rgba[index, ..., :3])
+                    continue
+                if resets[index]:
+                    generated = [rgba[index - 1]] * generated_count
+                    reset_fill_frames += generated_count
+                if len(generated) != generated_count and not resets[index]:
+                    disabled_frames += 1
+                    if runtime_fallback.startswith("Fail"):
+                        raise RuntimeError(
+                            f"DLSS-G returned {len(generated)} of {generated_count} "
+                            f"requested frame(s) at source frame {index}. Try 2x, enable "
+                            "HAGS, or select 'Hold previous frame' explicitly."
+                        )
+                    generated = list(generated[:generated_count])
+                    generated.extend(
+                        [rgba[index - 1]] * (generated_count - len(generated))
+                    )
+                output.extend(frame[..., :3] for frame in generated)
+                output.append(rgba[index, ..., :3])
+            maximum = session.maximum
+            logs = session.log_text()
+        result = torch.from_numpy(np.stack(output).astype(np.float32) / 255.0)
+        output_fps = float(input_fps) * factor
+        report = (
+            f"NVIDIA DLSS Frame Generation; {len(source)} input frames -> "
+            f"{len(result)} output frames; requested={factor}x; output_fps={output_fps:g}; "
+            f"scene_resets={sum(resets) - 1}; runtime_max={maximum + 1}x; "
+            f"reset_fill_frames={reset_fill_frames}; disabled_intervals={disabled_frames}; "
+            f"worker={worker}; runtime={runtime}"
+        )
+        if logs:
+            report += "\nWorker log:\n" + logs
+        return result.to(images.device), output_fps, report
+
+
+class DLSSFrameGenerationStatus:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {}}
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("status",)
+    FUNCTION = "status"
+    CATEGORY = "image/NVIDIA DLSS 5/video"
+
+    def status(self):
+        try:
+            worker, runtime = _dlssg_runtime_paths()
+            result = probe_worker(worker, runtime.parent)
+            hags = hags_enabled()
+            readiness = "READY" if hags is not False else "READY (HAGS WARNING)"
+            return (
+                readiness + "\n"
+                f"Worker: {worker}\nRuntime: {runtime}\nHAGS: {hags}\n"
+                + json.dumps(result, indent=2),
+            )
+        except Exception as exc:
+            return (f"NOT READY\n{exc}",)
 
 
 class DLSSSuperResolution:
@@ -1092,11 +1289,16 @@ class DLSS5RuntimeSetup:
     def run(self, action, confirm_download):
         runtime_dir = PACKAGE / "runtime"
         runtime_dir.mkdir(parents=True, exist_ok=True)
+        frame_generation_dir = runtime_dir / "dlssg"
+        frame_generation_dir.mkdir(parents=True, exist_ok=True)
         neural_runtime = runtime_dir / "nvngx_dlssnr.dll"
         if action == "Check location":
             state = "FOUND" if neural_runtime.is_file() else "MISSING"
             return (
                 f"Neural runtime: {state}\nCopy nvngx_dlssnr.dll to:\n{neural_runtime}\n\n"
+                "Optional Frame Generation files belong together in:\n"
+                f"{frame_generation_dir}\n"
+                "Required names: dlssg-worker.exe and nvngx_dlssg.dll\n\n"
                 "Then select 'Install verified VapourKit', enable confirm_download, and queue this node again.",
             )
         if not confirm_download:
@@ -1121,6 +1323,8 @@ NODE_CLASS_MAPPINGS = {
     "DLSS5VideoDepthAnything": DLSS5VideoDepthAnything,
     "DLSS5FlashDepth": DLSS5FlashDepth,
     "DLSS5TemporalDepthStabilize": DLSS5TemporalDepthStabilize,
+    "DLSSFrameGeneration": DLSSFrameGeneration,
+    "DLSSFrameGenerationStatus": DLSSFrameGenerationStatus,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "DLSS5RuntimeSetup": "DLSS Runtime Setup (One Click)",
@@ -1135,4 +1339,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "DLSS5VideoDepthAnything": "DLSS 5 Video Depth Anything (Temporal)",
     "DLSS5FlashDepth": "DLSS 5 FlashDepth (External, Optional)",
     "DLSS5TemporalDepthStabilize": "DLSS 5 Temporal Depth Stabilizer",
+    "DLSSFrameGeneration": "NVIDIA DLSS Frame Generation (External Worker)",
+    "DLSSFrameGenerationStatus": "DLSS Frame Generation Runtime Status",
 }

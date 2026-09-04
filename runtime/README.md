@@ -13,3 +13,19 @@ For the simplest installation:
 The one-click installer downloads only the pinned VapourKit nightly, verifies its SHA-256, and writes `config.json`. Downloaded and extracted runtime files remain ignored by Git and the Registry package.
 
 Never commit NVIDIA DLLs, patched DLLs, executables, API keys, or machine-specific `config.json` files.
+
+## Optional DLSS Frame Generation
+
+Frame Generation uses an external native worker. Put these two matching files in
+`runtime/dlssg/`:
+
+- `dlssg-worker.exe`
+- `nvngx_dlssg.dll`
+
+The extension does not download or distribute either file. The worker protocol is
+compatible with the public Python client in
+<https://github.com/Merserk/dlss5-visual-enhancer>. Its native worker source is not
+part of that repository, so verify the binary and confirm your right to use it.
+The reference project's downloads are listed at
+<https://github.com/Merserk/dlss5-visual-enhancer/releases>.
+Run **DLSS Frame Generation Runtime Status** before processing a video.

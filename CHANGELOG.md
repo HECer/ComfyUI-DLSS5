@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0 — 2026-09-04
+
+- Added optional DLSS Frame Generation and capability-status nodes.
+- Added a persistent external-worker protocol with timestamps, scene resets, and exact
+  output-frame accounting.
+- Added fail-fast handling for incomplete interpolation, with an explicit duration-preserving hold fallback.
+- Added a 24-to-48 fps ComfyUI workflow using RAFT motion guides.
+- Added full-workflow and node-detail screenshots for the Frame Generation path.
+- Fixed widget serialization in the Frame Generation workflow for current ComfyUI frontends.
+- Kept the native worker and NVIDIA Frame Generation runtime outside the package.
+
 ## 0.1.1
 
 - Added Registry and README branding with a square, small-size-readable project icon.
