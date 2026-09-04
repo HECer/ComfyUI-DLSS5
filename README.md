@@ -393,7 +393,7 @@ Interpolates an IMAGE batch at 2x, 3x, or 4x frame rate. It consumes the encoded
 
 `runtime_fallback` fails by default if the worker omits generated frames. The optional hold mode preserves duration by duplicating the preceding source frame, but it can produce visible judder and should not be mistaken for successful interpolation.
 
-This node uses a separately released MIT-licensed native worker whose complete source and reproducible Windows build are public. The installer can download the pinned worker automatically. The compatible NVIDIA runtime remains a manual installation and is never distributed by this project.
+This node uses a separately released MIT-licensed native worker whose complete source and automated Windows build are public. The installer can download the pinned worker automatically. The compatible NVIDIA runtime remains a manual installation and is never distributed by this project.
 
 ### DLSS Frame Generation Runtime Status
 
