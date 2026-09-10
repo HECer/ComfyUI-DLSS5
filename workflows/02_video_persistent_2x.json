@@ -624,7 +624,7 @@
             "Requires ComfyUI-VideoHelperSuite for the loader and encoder in this example.",
             "Persistent mode has no DLSS chunk reset but ComfyUI retains the full batch.",
             "Use a fast temporary SSD and test a short clip first.",
-            "The neural runtime is user-supplied and this integration is unofficial."
+            "The neural runtime is bundled and this integration is unofficial."
         ]
     },
     "version": 0.4

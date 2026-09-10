@@ -13,3 +13,9 @@ temp/
 *.exe
 *.zip
 *.7z
+!runtime/vsdlssnr.dll
+!runtime/vsdlsssr.dll
+!runtime/nvngx_dlss.dll
+!runtime/nvngx_dlssnr.dll
+!runtime/dlssg/
+!runtime/dlssg/nvngx_dlssg.dll

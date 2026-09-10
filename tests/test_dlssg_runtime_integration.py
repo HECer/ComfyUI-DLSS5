@@ -14,7 +14,7 @@ SPEC.loader.exec_module(nodes)
 
 @pytest.mark.skipif(
     os.environ.get("DLSS5_RUN_DLSSG_INTEGRATION") != "1",
-    reason="requires the user-supplied Windows DLSS-G runtime and supported GPU",
+    reason="requires the bundled Windows DLSS-G runtime and supported GPU",
 )
 def test_real_dlssg_worker_generates_complete_2x_sequence():
     height = width = 512

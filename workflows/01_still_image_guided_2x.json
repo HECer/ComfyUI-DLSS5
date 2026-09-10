@@ -506,7 +506,7 @@
             ]
         },
         "release_notes": [
-            "Unofficial experimental integration; user-supplied runtime required.",
+            "Unofficial experimental integration; the runtime is bundled.",
             "Single images do not provide true temporal motion.",
             "Inspect outputs at native aspect ratio and 100% zoom."
         ]

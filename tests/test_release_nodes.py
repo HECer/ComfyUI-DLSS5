@@ -159,12 +159,21 @@ def test_easy_presets_cover_quality_and_memory_scenarios():
     assert nodes._easy_preset("Auto (recommended)", 240) == long_video
 
 
+def test_neural_rendering_is_a_one_to_one_finisher():
+    required = nodes.DLSS5NeuralRendering.INPUT_TYPES()["required"]
+    assert "pre_scale" not in required
+    assert "depth_inverted" in required
+
+
 def test_runtime_setup_check_creates_and_reports_drop_location(monkeypatch, tmp_path):
     monkeypatch.setattr(nodes, "PACKAGE", tmp_path)
     report = nodes.DLSS5RuntimeSetup().run("Check location", False)[0]
     assert (tmp_path / "runtime").is_dir()
     assert (tmp_path / "runtime" / "dlssg").is_dir()
     assert "nvngx_dlssnr.dll" in report
+    assert "nvngx_dlss.dll" in report
+    assert "nvngx_dlssg.dll" in report
+    assert "Bundled VapourSynth wrappers: MISSING" in report
     assert "dlssg-worker.exe" in report
     assert "MISSING" in report
 

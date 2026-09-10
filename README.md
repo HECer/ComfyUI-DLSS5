@@ -7,7 +7,13 @@
 An unofficial Windows-only ComfyUI extension that connects image and video batches to NVIDIA DLSS Super Resolution and an experimental DLSS Neural Rendering runtime through VapourSynth/D3D12 wrappers.
 
 > [!IMPORTANT]
-> This project is not affiliated with, endorsed by, or supported by NVIDIA, ComfyUI, RenoDX, or VapourKit. It does **not** distribute NVIDIA runtime DLLs or patched game files. You must obtain every runtime file legally and review its license and trust implications yourself.
+> This project is not affiliated with, endorsed by, or supported by NVIDIA, ComfyUI, RenoDX, or VapourKit. This repository intentionally includes the runtime DLLs used by this extension; review their license and redistribution terms before publishing or deploying it.
+
+The package includes the two project-specific VapourSynth wrappers
+`runtime/vsdlssnr.dll` and `runtime/vsdlsssr.dll`, plus the NVIDIA runtime DLLs
+used by the tested setup. The wrappers are not NVIDIA runtime DLLs. VapourKit
+supplies the isolated VapourSynth Python runtime; the installer downloads only
+VapourKit and the optional open-source frame-generation worker.
 
 ![Alyx original, neutral neural rendering, stronger style, and difference heatmap](docs/images/style-comparison.png)
 
@@ -16,8 +22,8 @@ An unofficial Windows-only ComfyUI extension that connects image and video batch
 ## What this extension does
 
 - Runs NVIDIA DLSS Super Resolution at 2x, 3x, or 4x.
-- Runs the experimental neural rendering pass exposed by a user-supplied `nvngx_dlssnr.dll`.
-- Optionally runs NVIDIA DLSS Frame Generation through a separately supplied native worker and `nvngx_dlssg.dll`.
+- Runs the experimental neural rendering pass exposed by the bundled `nvngx_dlssnr.dll`.
+- Optionally runs NVIDIA DLSS Frame Generation through the bundled `nvngx_dlssg.dll` and a separately downloaded native worker.
 - Accepts depth and dense motion-vector guides.
 - Includes Depth Anything V2, temporally consistent Video Depth Anything Small, and RAFT guide nodes.
 - Offers FlashDepth as an isolated, optional high-resolution video-depth backend.
@@ -30,7 +36,7 @@ It does not turn an arbitrary photograph into a physically correct game-engine r
 
 ## Current status
 
-This is an **experimental alpha release**. It was locally validated on Windows with an RTX 5090, 24 fps input, 2x scaling, Depth Anything V2 Small, RAFT Large, and a user-supplied neural-rendering runtime.
+This is an **experimental alpha release**. It was locally validated on Windows with an RTX 5090, 24 fps input, 2x scaling, Depth Anything V2 Small, RAFT Large, and the bundled neural-rendering runtime.
 
 Known limitations:
 
@@ -79,10 +85,9 @@ The fixed 8-frame discontinuity was not measurable above ordinary frames in this
 - Generous temporary storage. Persistent 2x video processing can temporarily require many gigabytes.
 - An extracted VapourKit build containing:
   - `python.exe` with VapourSynth support
-  - `vsdlsssr.dll`
-  - `vsdlssnr.dll`
-  - `nvngx_dlss.dll`
-- A legally obtained, user-supplied `nvngx_dlssnr.dll` compatible with the wrapper.
+- The bundled VapourSynth wrappers in `runtime/` (`vsdlssnr.dll` and `vsdlsssr.dll`).
+- The bundled NVIDIA DLSS runtimes in `runtime/` (`nvngx_dlss.dll` and `nvngx_dlssnr.dll`).
+- The bundled optional Frame Generation runtime in `runtime/dlssg/` (`nvngx_dlssg.dll`).
 
 See [Runtime sources and legal notes](docs/RUNTIME_SOURCES.md) before installation.
 
@@ -91,10 +96,11 @@ See [Runtime sources and legal notes](docs/RUNTIME_SOURCES.md) before installati
 | Component | Files used by this extension | Source | Setup handling |
 | --- | --- | --- | --- |
 | ComfyUI | ComfyUI installation | [Official ComfyUI repository](https://github.com/comfyanonymous/ComfyUI) | Pass its directory to `-ComfyUIPath`. |
-| This extension | Python nodes, workflows, setup script | [ComfyUI-DLSS5 releases](https://github.com/HECer/ComfyUI-DLSS5/releases) | Clone or extract it; do not copy runtime DLLs into Git. |
-| VapourKit Windows runtime | VapourSynth `python.exe`, `vsdlsssr.dll`, `vsdlssnr.dll`, `nvngx_dlss.dll` | [VapourKit project](https://github.com/Kim2091/vapourkit), [tested 2026-08-31 nightly](https://github.com/Kim2091/vapourkit-nightly/releases/tag/nightly-2026-08-31), and [official community Discord](https://discord.gg/uYKMn2hGwB) | Extract it and pass the root directory to `-VapourKitPath`; setup locates the files recursively. Discord is a support/community link, not proof that a particular uploaded proprietary DLL may be redistributed. |
-| NVIDIA DLSS reference/runtime licensing | DLSS documentation and official SR SDK/runtime source | [Official NVIDIA/DLSS repository](https://github.com/NVIDIA/DLSS) and [NVIDIA DLSS developer page](https://developer.nvidia.com/rtx/dlss) | Read the included licenses. The tested VapourKit package already supplies the SR runtime expected by setup. |
-| Experimental neural-rendering runtime | `nvngx_dlssnr.dll` | No generally available official NVIDIA download was identified for this experimental file at release time. Use only a copy from software you legally obtained and whose terms permit this use. | Pass the exact local file to `-NeuralRuntimeDll`. The file is copied only into the ignored local `runtime` directory. |
+| This extension | Python nodes, workflows, setup script, `vsdlssnr.dll`, `vsdlsssr.dll`, `nvngx_dlss.dll`, `nvngx_dlssnr.dll`, `nvngx_dlssg.dll` | [ComfyUI-DLSS5 releases](https://github.com/HECer/ComfyUI-DLSS5/releases) | Clone or extract it; the wrappers and tested NVIDIA runtime DLLs are included in `runtime/`. |
+| VapourKit Windows runtime | VapourSynth `python.exe` | [VapourKit project](https://github.com/Kim2091/vapourkit), [tested 2026-08-31 nightly](https://github.com/Kim2091/vapourkit-nightly/releases/tag/nightly-2026-08-31), and [official community Discord](https://discord.gg/uYKMn2hGwB) | Extract it and pass the root directory to `-VapourKitPath`; setup locates the Python runtime recursively. Discord is a support/community link, not proof that a particular uploaded proprietary DLL may be redistributed. |
+| NVIDIA DLSS SR runtime | `nvngx_dlss.dll` | Included in `runtime/`; matching reference source: [NVIDIA DLSS `v310.7.0`](https://github.com/NVIDIA/DLSS/tree/v310.7.0) | Used directly from the repository and hash-checked by the installer. Read and comply with NVIDIA's license. |
+| Experimental NVIDIA neural-rendering runtime | `nvngx_dlssnr.dll` | Included in `runtime/`; SHA-256 is documented in [runtime/README.md](runtime/README.md) | Used directly from the repository. Read and comply with the runtime's license and distribution terms. |
+| NVIDIA DLSS Frame Generation runtime | `runtime/dlssg/nvngx_dlssg.dll` | Included in `runtime/dlssg/` | Used beside the downloaded open-source worker. Read and comply with NVIDIA's license. |
 | Depth guide | Depth Anything V2 Small/Base/Large weights | [Depth Anything V2 Small model card](https://huggingface.co/depth-anything/Depth-Anything-V2-Small-hf) and [Depth Anything organization](https://huggingface.co/depth-anything) | Downloaded automatically by Transformers on first use. |
 | Temporal video depth (recommended) | Video Depth Anything Small source and weights | [Official repository](https://github.com/DepthAnything/Video-Depth-Anything) and [official VDA-S weights](https://huggingface.co/depth-anything/Video-Depth-Anything-Small) | The VDA node downloads the Apache-2.0 source at a pinned commit and official weights on first use. |
 | High-resolution video depth (optional) | FlashDepth source, isolated environment, and checkpoint | [Official repository](https://github.com/Eyeline-Labs/FlashDepth) and [official weights](https://huggingface.co/Eyeline-Labs/FlashDepth) | Follow [the isolated setup guide](docs/FLASHDEPTH.md); ComfyUI's Torch environment is never replaced. |
@@ -108,15 +114,14 @@ ReShade, game-specific injectors, DLSS override utilities, and Nexus mods are no
 
 ### Recommended: ComfyUI Manager + one-click runtime setup
 
-1. Install **ComfyUI-DLSS5** with ComfyUI Manager. Until the Registry listing is approved, use Manager's Git URL installation with `https://github.com/HECer/ComfyUI-DLSS5`.
+1. Install **ComfyUI-DLSS5** with ComfyUI Manager. Until the Registry listing is approved, use Manager's Git URL installation with `https://github.com/HECer/ComfyUI-DLSS5`. If cloning manually, install Git LFS first with `git lfs install` so the large bundled NR runtime is fetched correctly.
 2. Restart ComfyUI once so Manager installs the dependencies declared in `pyproject.toml`/`requirements.txt`.
 3. Add **DLSS Runtime Setup (One Click)** to a workflow, leave `action` at `Check location`, and queue it. The output shows the exact local `runtime` directory and creates it if necessary.
-4. Copy your legally obtained `nvngx_dlssnr.dll` to that displayed location. Keep the exact filename.
-5. In the same node, select `Install verified VapourKit`, enable `confirm_download`, and queue it again.
+4. In the same node, select `Install verified VapourKit`, enable `confirm_download`, and queue it again.
 
-The installer downloads the pinned [VapourKit Windows nightly](https://github.com/Kim2091/vapourkit-nightly/releases/tag/nightly-2026-08-31), verifies its published SHA-256 (`af3ecfb868a96477ab10e1588d7bac0fb2729332f2f464b998677efdee9e0554`), extracts it into the ignored local runtime directory, locates all wrappers/runtimes, and writes `runtime/config.json`. Restart ComfyUI and run **DLSS 5 Runtime Status**.
+The installer uses the bundled `nvngx_dlss.dll`, `nvngx_dlssnr.dll`, `nvngx_dlssg.dll`, and VapourSynth wrappers, verifies the bundled runtime hashes, downloads only the pinned [VapourKit Windows nightly](https://github.com/Kim2091/vapourkit-nightly/releases/tag/nightly-2026-08-31) and the open-source DLSS-G worker, extracts VapourKit into the ignored local runtime directory, and writes `runtime/config.json`. Restart ComfyUI and run **DLSS 5 Runtime Status**.
 
-The 368 MB VapourKit archive is downloaded only once. Extracted files and configuration remain local and are excluded from Git and Registry packages. The installer never downloads `nvngx_dlssnr.dll`.
+The 368 MB VapourKit archive is downloaded only once. Extracted files, the worker, and configuration remain local; the bundled runtime DLLs and wrappers are part of the repository package.
 
 No terminal or PowerShell command is required for the recommended path. `install_runtime.ps1` and `install_runtime.py` remain available as headless/manual alternatives.
 
@@ -125,6 +130,7 @@ No terminal or PowerShell command is required for the recommended path. `install
 ### 1. Clone the extension
 
 ```powershell
+git lfs install
 git clone https://github.com/HECer/ComfyUI-DLSS5.git
 cd ComfyUI-DLSS5
 ```
@@ -141,9 +147,9 @@ Download a compatible Windows build from the official VapourKit project or its n
 
 Keep the extracted directory. The extension records the path to its isolated VapourSynth Python runtime.
 
-### 3. Obtain the neural-rendering runtime
+### 3. Review the bundled runtime files
 
-Provide your own `nvngx_dlssnr.dll`. This repository intentionally does not link to unauthorized mirrors, bypass tools, leaked packages, or copyrighted game archives. If your copy came with software you are licensed to use, verify that its terms permit your intended use.
+The repository already contains the exact `nvngx_dlss.dll`, `nvngx_dlssnr.dll`, `nvngx_dlssg.dll`, `vsdlssnr.dll`, and `vsdlsssr.dll` used by the tested setup. Use the optional `-NeuralRuntimeDll` or `-SRRuntimeDll` arguments only when intentionally overriding a bundled runtime.
 
 ### 4. Run setup once
 
@@ -151,13 +157,12 @@ Provide your own `nvngx_dlssnr.dll`. This repository intentionally does not link
 .\setup.ps1 `
   -ComfyUIPath "O:\AI\ComfyUI" `
   -VapourKitPath "O:\Tools\VapourKit" `
-  -NeuralRuntimeDll "O:\Runtimes\nvngx_dlssnr.dll" `
   -TempDirectory "O:\ComfyTemp\DLSS"
 ```
 
-The script validates required files, copies the selected local runtime DLLs into the ignored `runtime` directory, writes an ignored machine-local `runtime/config.json`, and creates a junction under `custom_nodes` when needed. ComfyUI Manager/Registry installs the declared Python dependencies; manual Git installations must install `requirements.txt` once with ComfyUI's Python interpreter.
+The script validates the VapourKit Python/runtime files, uses the bundled wrappers and NVIDIA runtime DLLs by default, writes an ignored machine-local `runtime/config.json`, and creates a junction under `custom_nodes` when needed. ComfyUI Manager/Registry installs the declared Python dependencies; manual Git installations must install `requirements.txt` once with ComfyUI's Python interpreter.
 
-It does not download or install a neural-rendering DLL. The bridge requests VapourKit's caller-check compatibility option; this repository does not patch the proprietary runtime. Review the licenses and terms for every locally supplied component before enabling it.
+The bridge requests VapourKit's caller-check compatibility option; this repository does not patch the proprietary runtime. Review the licenses and terms for every bundled component before enabling or redistributing it.
 
 Restart ComfyUI after setup. Add **DLSS 5 Runtime Status** and confirm that every path reports `READY`.
 
@@ -310,7 +315,7 @@ Start with a short clip. Confirm frame count, FPS, dimensions, and available tem
 
 Import [`workflows/06_video_dlssg_24_to_48.json`](workflows/06_video_dlssg_24_to_48.json). It estimates current-to-previous motion with RAFT and inserts one generated frame between each pair of source frames. The example is configured for 24 to 48 fps; change both the node's input FPS and the encoder FPS when your source differs.
 
-Frame Generation uses the open-source [DLSS-G Stream Worker](https://github.com/HECer/DLSSG-Stream-Worker). The runtime installer downloads its pinned release and verifies the SHA-256 hash. You still need to place a compatible, legally obtained `nvngx_dlssg.dll` beside it in `runtime/dlssg/`. See [runtime sources](docs/RUNTIME_SOURCES.md) before installing native binaries.
+Frame Generation uses the open-source [DLSS-G Stream Worker](https://github.com/HECer/DLSSG-Stream-Worker). The runtime installer downloads its pinned release and verifies the SHA-256 hash; the matching `nvngx_dlssg.dll` is bundled in `runtime/dlssg/`. See [runtime sources](docs/RUNTIME_SOURCES.md) before installing native binaries.
 
 ![Complete DLSS Frame Generation workflow in ComfyUI](docs/images/comfyui-dlssg-workflow.png)
 
@@ -355,9 +360,10 @@ Runs only the experimental neural-rendering pass at the current resolution.
 - `local_structure`: local structural emphasis.
 - `skin_structure`: skin-specific structural control; `-1` leaves runtime behavior unchanged.
 - `auto_mask`: requests the runtime's automatic effect mask.
-- `pre_scale`: conventional bicubic preprocessing, not DLSS Super Resolution.
 - `depth_inverted`: flips the expected depth convention.
 - `effect_mask`: optional ComfyUI mask applied after rendering.
+
+The standalone Neural Rendering node always runs at 1:1 input resolution. Upscale first with the separate DLSS Super Resolution node or use the Full Pipeline.
 
 ### DLSS SR + Experimental Neural Rendering (Advanced)
 
@@ -393,7 +399,7 @@ Interpolates an IMAGE batch at 2x, 3x, or 4x frame rate. It consumes the encoded
 
 `runtime_fallback` fails by default if the worker omits generated frames. The optional hold mode preserves duration by duplicating the preceding source frame, but it can produce visible judder and should not be mistaken for successful interpolation.
 
-This node uses a separately released MIT-licensed native worker whose complete source and automated Windows build are public. The installer can download the pinned worker automatically. The compatible NVIDIA runtime remains a manual installation and is never distributed by this project.
+This node uses a separately released MIT-licensed native worker whose complete source and automated Windows build are public. The installer can download the pinned worker automatically; the compatible NVIDIA runtime is included in `runtime/dlssg/`.
 
 ### DLSS Frame Generation Runtime Status
 

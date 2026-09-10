@@ -55,7 +55,7 @@
         {"name": "output_fps", "type": "FLOAT", "links": null},
         {"name": "runtime_report", "type": "STRING", "links": null}
       ],
-      "properties": {"Node name for S&R": "DLSSFrameGeneration", "Node note": "Requires runtime/dlssg/dlssg-worker.exe and nvngx_dlssg.dll. Scene cuts duplicate the preceding source frame instead of interpolating across the cut."},
+      "properties": {"Node name for S&R": "DLSSFrameGeneration", "Node note": "Requires runtime/dlssg/dlssg-worker.exe and the bundled nvngx_dlssg.dll. Scene cuts duplicate the preceding source frame instead of interpolating across the cut."},
       "widgets_values": ["2x", 24.0, 0.28, "Fail on missing frames (recommended)"]
     },
     {
@@ -95,10 +95,10 @@
   ],
   "groups": [
     {"title": "MOTION — estimated from pixels", "bounding": [390, 180, 420, 280], "color": "#3f789e", "font_size": 24},
-    {"title": "DLSS-G — external runtime, test short clips first", "bounding": [820, 120, 500, 610], "color": "#6f5630", "font_size": 24},
+    {"title": "DLSS-G — bundled runtime, test short clips first", "bounding": [820, 120, 500, 610], "color": "#6f5630", "font_size": 24},
     {"title": "OUTPUT — keep duration by multiplying FPS", "bounding": [1340, 110, 500, 550], "color": "#486b33", "font_size": 24}
   ],
   "config": {},
-  "extra": {"ds": {"scale": 0.72, "offset": [20, 70]}, "release_notes": ["Requires ComfyUI-VideoHelperSuite for loading and encoding.", "The worker and NVIDIA runtime are user-supplied and are not redistributed.", "The example assumes constant 24 fps and writes 48 fps output.", "Pixel-estimated RAFT flow is less accurate than native game-engine motion vectors."]},
+  "extra": {"ds": {"scale": 0.72, "offset": [20, 70]}, "release_notes": ["Requires ComfyUI-VideoHelperSuite for loading and encoding.", "The matching NVIDIA runtime is bundled; the open-source worker is downloaded and hash-verified.", "The example assumes constant 24 fps and writes 48 fps output.", "Pixel-estimated RAFT flow is less accurate than native game-engine motion vectors."]},
   "version": 0.4
 }

@@ -85,6 +85,6 @@
     {"title": "OUTPUT — no stretching", "bounding": [900, 40, 500, 790], "color": "#486b33", "font_size": 24}
   ],
   "config": {},
-  "extra": {"ds": {"scale": 0.78, "offset": [40, 70]}, "release_notes": ["The Easy node downloads Depth Anything V2 Small on first use.", "Video quality presets additionally download RAFT weights.", "This is an unofficial experimental integration and requires a user-supplied runtime."]},
+  "extra": {"ds": {"scale": 0.78, "offset": [40, 70]}, "release_notes": ["The Easy node downloads Depth Anything V2 Small on first use.", "Video quality presets additionally download RAFT weights.", "This is an unofficial experimental integration and uses the bundled runtime."]},
   "version": 0.4
 }
