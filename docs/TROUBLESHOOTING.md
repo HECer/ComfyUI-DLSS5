@@ -2,7 +2,13 @@
 
 ## Runtime Status says NOT READY
 
-Run `setup.ps1` again and inspect `runtime/config.json`. Every configured path must exist. Keep the extracted VapourKit directory in the selected location.
+Run `setup.ps1` again and inspect `runtime/config.json`. Every configured path must exist. The setup expects the bundled wrappers and NVIDIA runtimes: `runtime/vsdlssnr.dll`, `runtime/vsdlsssr.dll`, `runtime/nvngx_dlss.dll`, and `runtime/nvngx_dlssnr.dll`. It keeps the extracted VapourKit directory in the selected location.
+
+If an older clone reports that `vsdlsssr.dll` is missing below VapourKit, update the extension first. The SR wrapper is bundled by this project; it is not a VapourKit file.
+
+If a bundled NVIDIA runtime is missing, update/re-extract the repository package. You can deliberately override the SR or NR runtime with `-SRRuntimeDll` or `-NeuralRuntimeDll`.
+
+If `runtime/nvngx_dlssnr.dll` is only a small text pointer, install Git LFS (`git lfs install`) and run `git lfs pull` from the repository root, then run setup again.
 
 ## `No module named vapoursynth`
 

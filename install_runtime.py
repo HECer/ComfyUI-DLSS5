@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import urllib.request
@@ -12,6 +13,14 @@ RELEASE = "nightly-2026-08-31"
 ARCHIVE = "Vapourkit-windows-nightly-2026-08-31.7z"
 URL = f"https://github.com/Kim2091/vapourkit-nightly/releases/download/{RELEASE}/{ARCHIVE}"
 SHA256 = "af3ecfb868a96477ab10e1588d7bac0fb2729332f2f464b998677efdee9e0554"
+NVIDIA_DLSS_RELEASE = "v310.7.0"
+NVIDIA_DLSS_URL = (
+    "https://raw.githubusercontent.com/NVIDIA/DLSS/"
+    f"{NVIDIA_DLSS_RELEASE}/lib/Windows_x86_64/rel/nvngx_dlss.dll"
+)
+NVIDIA_DLSS_SHA256 = "be6e434a94ca32499515eb62ca0e6c274526055d568d0426e4c652dcdfb6ee6e"
+NVIDIA_DLSSNR_SHA256 = "8270b350cd82de5ce89806872cdd6b6a9249b80836b91bbeb3573470744cc206"
+NVIDIA_DLSSG_SHA256 = "c64928fdb7c48a57722ea8eef2662171edc323473adea66c29a206a23f1a2bed"
 DLSSG_WORKER_RELEASE = "v0.1.0"
 DLSSG_WORKER_URL = (
     "https://github.com/HECer/DLSSG-Stream-Worker/releases/download/"
@@ -23,6 +32,7 @@ DLSSG_LEGACY_WORKER_SHA256 = {
 }
 PACKAGE = Path(__file__).resolve().parent
 RUNTIME = PACKAGE / "runtime"
+BUNDLED_PLUGINS = ("vsdlssnr.dll", "vsdlsssr.dll")
 
 
 def sha256(path: Path) -> str:
@@ -62,6 +72,64 @@ def find_one(root: Path, name: str) -> Path:
     if not matches:
         raise RuntimeError(f"{name} was not found in the extracted VapourKit build")
     return matches[0]
+
+
+def bundled_plugin(name: str) -> Path:
+    if name not in BUNDLED_PLUGINS:
+        raise ValueError(f"Unsupported bundled plugin: {name}")
+    path = RUNTIME / name
+    if not path.is_file():
+        raise RuntimeError(
+            f"Bundled {name} is missing from the extension package: {path}"
+        )
+    return path
+
+
+def stage_bundled_plugins(destination: Path) -> tuple[Path, Path]:
+    """Ensure the project wrappers are present in the local runtime directory."""
+    destination.mkdir(parents=True, exist_ok=True)
+    staged = []
+    for name in BUNDLED_PLUGINS:
+        target = destination / name
+        source = bundled_plugin(name)
+        if source.resolve() != target.resolve():
+            shutil.copy2(source, target)
+        staged.append(target)
+    return staged[0], staged[1]
+
+
+def install_sr_runtime(destination: Path) -> str:
+    """Install the pinned official NVIDIA SR runtime into the local runtime dir."""
+    if destination.is_file():
+        actual = sha256(destination).lower()
+        if actual != NVIDIA_DLSS_SHA256:
+            raise RuntimeError(
+                "Existing NVIDIA DLSS SR runtime has an unexpected SHA-256. "
+                f"Preserve or replace it manually: {destination}\nSHA-256: {actual}"
+            )
+        return actual
+
+    print(f"Pinned NVIDIA DLSS SR runtime: {NVIDIA_DLSS_URL}")
+    download(NVIDIA_DLSS_URL, destination, "NVIDIA DLSS SR runtime")
+    actual = sha256(destination).lower()
+    if actual != NVIDIA_DLSS_SHA256:
+        destination.rename(destination.with_suffix(destination.suffix + ".unverified"))
+        raise RuntimeError(
+            "NVIDIA DLSS SR runtime SHA-256 mismatch: "
+            f"expected {NVIDIA_DLSS_SHA256}, got {actual}"
+        )
+    return actual
+
+
+def verify_runtime_hash(destination: Path, expected: str, label: str) -> str:
+    if not destination.is_file():
+        raise RuntimeError(f"Bundled {label} is missing: {destination}")
+    actual = sha256(destination).lower()
+    if actual != expected:
+        raise RuntimeError(
+            f"Bundled {label} SHA-256 mismatch: expected {expected}, got {actual}"
+        )
+    return actual
 
 
 def find_vapour_python(root: Path) -> Path:
@@ -123,8 +191,19 @@ def install() -> str:
     neural_runtime = RUNTIME / "nvngx_dlssnr.dll"
     if not neural_runtime.is_file():
         raise RuntimeError(
-            f"Place your legally obtained nvngx_dlssnr.dll here first:\n{neural_runtime}"
+            f"Bundled nvngx_dlssnr.dll is missing from the extension package:\n{neural_runtime}"
         )
+
+    sr_runtime = RUNTIME / "nvngx_dlss.dll"
+    sr_runtime_hash = install_sr_runtime(sr_runtime)
+    print("NVIDIA DLSS SR runtime SHA-256 verified.")
+    neural_runtime_hash = verify_runtime_hash(
+        neural_runtime, NVIDIA_DLSSNR_SHA256, "NVIDIA DLSS NR runtime"
+    )
+    dlssg_runtime = dlssg_dir / "nvngx_dlssg.dll"
+    dlssg_runtime_hash = verify_runtime_hash(
+        dlssg_runtime, NVIDIA_DLSSG_SHA256, "NVIDIA DLSS-G runtime"
+    )
 
     archive = RUNTIME / ARCHIVE
     if not archive.is_file():
@@ -149,20 +228,26 @@ def install() -> str:
             bundle.extractall(path=extracted)
         marker.write_text(SHA256 + "\n", encoding="utf-8")
 
+    # VapourKit supplies the VapourSynth Python runtime.  The project wrappers
+    # and the pinned NVIDIA SR runtime live together in the local runtime dir;
+    # the SR wrapper uses its module directory as the NGX search path.
+    nr_plugin, sr_plugin = stage_bundled_plugins(RUNTIME)
     python = find_vapour_python(extracted)
-    nr_plugin = find_one(extracted, "vsdlssnr.dll")
-    sr_plugin = find_one(extracted, "vsdlsssr.dll")
-    sr_runtime = find_one(extracted, "nvngx_dlss.dll")
     config = {
         "python": str(python.resolve()),
         "nr_plugin": str(nr_plugin.resolve()),
         "nr_runtime": str(neural_runtime.resolve()),
+        "nvidia_dlssnr_sha256": neural_runtime_hash,
         "sr_plugin": str(sr_plugin.resolve()),
         "sr_runtime": str(sr_runtime.resolve()),
         "temp_dir": str((RUNTIME / "temp").resolve()),
         "timeout_seconds": 0,
         "vapourkit_release": RELEASE,
         "vapourkit_archive_sha256": SHA256,
+        "nvidia_dlss_release": NVIDIA_DLSS_RELEASE,
+        "nvidia_dlss_sha256": sr_runtime_hash,
+        "dlssg_runtime": str(dlssg_runtime.resolve()),
+        "dlssg_runtime_sha256": dlssg_runtime_hash,
         "dlssg_worker": str(dlssg_worker.resolve()),
         "dlssg_worker_release": DLSSG_WORKER_RELEASE,
         "dlssg_worker_sha256": DLSSG_WORKER_SHA256,
@@ -174,6 +259,9 @@ def install() -> str:
     return (
         "Runtime setup complete. Restart ComfyUI, then run DLSS 5 Runtime Status.\n"
         f"Configuration: {RUNTIME / 'config.json'}\n"
+        f"Bundled wrappers: {nr_plugin.name}, {sr_plugin.name}\n"
+        f"Bundled NVIDIA runtimes: {neural_runtime.name}, {sr_runtime.name}\n"
+        f"Verified NVIDIA DLSS SR SHA-256: {sr_runtime_hash}\n"
         f"Verified VapourKit SHA-256: {SHA256}"
         f"\nVerified DLSS-G worker SHA-256: {DLSSG_WORKER_SHA256}"
     )

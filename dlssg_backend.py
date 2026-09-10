@@ -69,7 +69,8 @@ class DLSSGSession:
     """Persistent binary stream for an external D3D12 DLSS-G worker.
 
     The protocol follows the public Python client in Merserk/dlss5-visual-enhancer.
-    The native worker and NVIDIA runtime are external, user-supplied components.
+    The native worker is downloaded separately; the NVIDIA runtime is bundled
+    with the extension and must remain beside the worker.
     """
 
     def __init__(

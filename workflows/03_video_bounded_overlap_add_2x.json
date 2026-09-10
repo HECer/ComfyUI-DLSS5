@@ -624,7 +624,7 @@
             "Requires ComfyUI-VideoHelperSuite for the loader and encoder in this example.",
             "Bounded overlap-add trades native history length for a smaller runtime working set.",
             "Increase history_overlap before increasing chunk_size when periodic seams are visible.",
-            "The neural runtime is user-supplied and this integration is unofficial."
+            "The neural runtime is bundled and this integration is unofficial."
         ]
     },
     "version": 0.4

@@ -1,6 +1,23 @@
 # Runtime sources and legal notes
 
-This extension contains no NVIDIA runtime DLLs. Its setup script expects files that you obtained separately and are authorized to use.
+This extension contains the project-specific VapourSynth wrapper binaries and
+the NVIDIA runtime DLLs used by the tested setup. The setup script uses these
+bundled files by default; override paths remain available for deliberate
+version changes.
+
+## Bundled VapourSynth wrappers
+
+`runtime/vsdlssnr.dll` and `runtime/vsdlsssr.dll` are the two non-NVIDIA
+VapourSynth bridge plugins used by this extension. They are bundled because the
+VapourKit nightly does not provide the SR wrapper and its runtime layout may not
+provide the NR wrapper at the path the extension needs. The installer keeps
+both files next to the pinned local `nvngx_dlss.dll` in `runtime/` so the SR
+wrapper's NGX module search path is correct.
+
+The wrappers are built from the GPL-3.0 VapourKit wrapper sources. See the
+VapourKit project and the build instructions in the corresponding source tree
+for the applicable source and license terms. This follows the upstream
+clarification in [issue #1](https://github.com/HECer/ComfyUI-DLSS5/issues/1#issuecomment-5623379346): `vsdlssnr.dll` is the project-specific NR wrapper, while VapourKit does not provide `vsdlsssr.dll`.
 
 ## VapourKit
 
@@ -10,7 +27,10 @@ This extension contains no NVIDIA runtime DLLs. Its setup script expects files t
 - Community/support Discord: <https://discord.gg/uYKMn2hGwB>
 - License: GPL-3.0 for the VapourKit project; bundled third-party components may use other licenses.
 
-The tested environment used a VapourKit nightly containing `vsdlsssr.dll`, `vsdlssnr.dll`, a VapourSynth-capable Python runtime, and `nvngx_dlss.dll`. Nightlies are pre-releases and may change without compatibility guarantees.
+The tested environment used a VapourKit nightly containing a VapourSynth-capable
+Python runtime; this extension supplies the two wrappers and the tested NVIDIA
+runtime files itself. Nightlies are pre-releases and may change without
+compatibility guarantees.
 
 The Discord invite is linked by the VapourKit project. Treat it as a community and support channel. A file attached by an individual member is not automatically an official release, integrity guarantee, or grant of redistribution rights.
 
@@ -21,13 +41,34 @@ The Discord invite is linked by the VapourKit project. Treat it as a community a
 
 Read NVIDIA's license files before copying, modifying, or redistributing any SDK or runtime component.
 
+The repository includes the Windows x64 `nvngx_dlss.dll` from the official
+`v310.7.0` DLSS release. The installer verifies SHA-256
+`be6e434a94ca32499515eb62ca0e6c274526055d568d0426e4c652dcdfb6ee6e` before
+using it. Manual setup accepts a deliberate replacement through
+`-SRRuntimeDll`.
+
 ## Neural-rendering runtime
 
-`nvngx_dlssnr.dll` is not distributed here. This project does not endorse download mirrors, leaked game files, DRM bypass tools, or redistribution of proprietary binaries. The bridge requests the VapourKit wrapper's caller-check compatibility option; it does not modify the proprietary DLL. You are responsible for confirming that this mode and your runtime source are permitted by the applicable licenses and terms.
+The repository includes the exact `nvngx_dlssnr.dll` used by the tested setup.
+Its SHA-256 is
+`8270b350cd82de5ce89806872cdd6b6a9249b80836b91bbeb3573470744cc206`.
+The bridge requests the VapourKit wrapper's caller-check compatibility option;
+it does not modify the proprietary DLL. Confirm that the applicable license
+permits redistribution and this mode of use.
 
 The setup script accepts a local path because users may possess the runtime under different legitimate terms. You are responsible for determining whether your source and use are authorized.
 
-At the time of this release, we did not identify a generally available official NVIDIA download specifically for `nvngx_dlssnr.dll`. A Reddit post, mod guide, DLL database, game-mod archive, or matching filename is not an integrity or license guarantee. This project therefore does not provide a download link for that proprietary file.
+The included file is intentionally pinned by hash rather than fetched from an
+unofficial mirror. A Reddit post, mod guide, DLL database, game-mod archive, or
+matching filename is not an integrity or license guarantee.
+
+## NVIDIA DLSS Frame Generation runtime
+
+The repository also includes `runtime/dlssg/nvngx_dlssg.dll` for the optional
+Frame Generation worker. Its SHA-256 is
+`c64928fdb7c48a57722ea8eef2662171edc323473adea66c29a206a23f1a2bed`.
+It must remain beside the matching `dlssg-worker.exe` downloaded by the
+installer. Confirm NVIDIA's license before redistribution.
 
 ## Models
 
@@ -39,8 +80,8 @@ These weights are fetched automatically on first use. For offline systems, downl
 ## Optional DLSS Frame Generation backend
 
 The Frame Generation nodes use `dlssg-worker.exe` from the MIT-licensed
-[HECer/DLSSG-Stream-Worker](https://github.com/HECer/DLSSG-Stream-Worker) and a
-separately supplied `nvngx_dlssg.dll`. The worker repository contains the full
+[HECer/DLSSG-Stream-Worker](https://github.com/HECer/DLSSG-Stream-Worker) and the
+matching bundled `nvngx_dlssg.dll`. The worker repository contains the full
 C++ source, protocol specification, CMake build, Windows CI, and tagged releases.
 The runtime installer downloads release v0.1.0 and checks its pinned SHA-256 before
 use.
@@ -48,8 +89,7 @@ use.
 - Open-source worker release: <https://github.com/HECer/DLSSG-Stream-Worker/releases/tag/v0.1.0>
 - Official NVIDIA Streamline DLSS-G integration guide: <https://github.com/NVIDIA-RTX/Streamline/blob/main/docs/ProgrammingGuideDLSS_G.md>
 
-Obtain NVIDIA components from an official SDK, driver, or licensed application source.
-Keep the worker and its matching runtime together, record their SHA-256 hashes, and run
+Keep the bundled worker runtime and downloaded worker together, record their SHA-256 hashes, and run
 the capability-status node before processing media. The upstream integration targets
 Windows 11, Direct3D 12, a supported RTX 40- or 50-series GPU, and a compatible driver;
 it also recommends Hardware-accelerated GPU scheduling.
@@ -68,4 +108,4 @@ Review each model card, dataset statement, and license. Caching a model locally 
 
 ## Compatibility reports
 
-Include GPU, driver, Windows, ComfyUI, PyTorch/CUDA, input dimensions, processing mode, and SHA-256 hashes for all four runtime DLLs. Never upload proprietary DLLs to an issue.
+Include GPU, driver, Windows, ComfyUI, PyTorch/CUDA, input dimensions, processing mode, and SHA-256 hashes for all five runtime DLLs. Never upload proprietary DLLs to an issue.

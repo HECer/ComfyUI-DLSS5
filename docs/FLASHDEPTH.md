@@ -11,4 +11,6 @@ Use an isolated environment and follow the official upstream installation instru
 
 Choose **FlashDepth Full (2K)** for high-resolution footage. Upstream recommends **FlashDepth-L** when the short side is below roughly 518 pixels. The node exchanges a temporary video with the isolated process and removes it after execution.
 
-The FlashDepth repository and weights are Apache-2.0. NVIDIA's runtime DLL is separate, user-supplied software and is not included here.
+The FlashDepth repository and weights are Apache-2.0. The DLSS runtime DLLs
+used by this extension are included in the repository; FlashDepth itself does
+not modify or replace them.

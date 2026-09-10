@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.4.0] - 2026-09-11
+
+### Added
+
+- Bundled the `vsdlssnr.dll` and `vsdlsssr.dll` VapourSynth wrappers required by
+  the ComfyUI bridge.
+- Bundled the tested NVIDIA SR, NR, and optional Frame Generation runtime DLLs;
+  setup now validates and uses them directly.
+- Documented the exact hashes and provenance of every bundled runtime DLL,
+  including Git LFS handling for the large NR runtime.
+
+### Changed
+
+- Fixed one-click and PowerShell setup so they no longer expect `vsdlsssr.dll`
+  to be supplied by VapourKit; wrappers are staged beside the SR runtime.
+- Removed the standalone NR node's misleading pre-scale control; NR now remains
+  explicitly 1:1 and SR owns all upscaling.
+
 ## 0.3.1 — 2026-09-04
 
 - Replaced the undocumented Frame Generation worker recommendation with the

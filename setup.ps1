@@ -2,7 +2,8 @@
 param(
     [Parameter(Mandatory = $true)] [string] $ComfyUIPath,
     [Parameter(Mandatory = $true)] [string] $VapourKitPath,
-    [Parameter(Mandatory = $true)] [string] $NeuralRuntimeDll,
+    [string] $NeuralRuntimeDll = "",
+    [string] $SRRuntimeDll = "",
     [string] $TempDirectory = ""
 )
 
@@ -10,7 +11,18 @@ $ErrorActionPreference = "Stop"
 $repo = $PSScriptRoot
 $comfy = (Resolve-Path -LiteralPath $ComfyUIPath).Path
 $vapourKit = (Resolve-Path -LiteralPath $VapourKitPath).Path
-$nrRuntime = (Resolve-Path -LiteralPath $NeuralRuntimeDll).Path
+$runtimeDir = Join-Path $repo "runtime"
+New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
+
+if ($NeuralRuntimeDll) {
+    $nrRuntime = (Resolve-Path -LiteralPath $NeuralRuntimeDll).Path
+} else {
+    $nrRuntime = Join-Path $runtimeDir "nvngx_dlssnr.dll"
+    if (-not (Test-Path -LiteralPath $nrRuntime -PathType Leaf)) {
+        throw "Could not find bundled nvngx_dlssnr.dll. Supply -NeuralRuntimeDll with an authorized compatible runtime."
+    }
+    $nrRuntime = (Resolve-Path -LiteralPath $nrRuntime).Path
+}
 
 if ([IO.Path]::GetFileName($nrRuntime) -ne "nvngx_dlssnr.dll") {
     throw "NeuralRuntimeDll must point to nvngx_dlssnr.dll."
@@ -23,6 +35,14 @@ function Find-One([string] $Root, [string] $Name) {
     return $matches[0].FullName
 }
 
+function Find-Bundled-Plugin([string] $Name) {
+    $path = Join-Path $repo (Join-Path "runtime" $Name)
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        throw "Bundled $Name is missing from the extension package: $path"
+    }
+    return (Resolve-Path -LiteralPath $path).Path
+}
+
 function Find-VapourPython([string] $Root) {
     $candidates = @(Get-ChildItem -LiteralPath $Root -Filter "python.exe" -File -Recurse -ErrorAction SilentlyContinue)
     foreach ($candidate in $candidates) {
@@ -33,16 +53,33 @@ function Find-VapourPython([string] $Root) {
 }
 
 $vsPython = Find-VapourPython $vapourKit
-$nrPlugin = Find-One $vapourKit "vsdlssnr.dll"
-$srPlugin = Find-One $vapourKit "vsdlsssr.dll"
-$srRuntime = Find-One $vapourKit "nvngx_dlss.dll"
+$nrPlugin = Find-Bundled-Plugin "vsdlssnr.dll"
+$srPlugin = Find-Bundled-Plugin "vsdlsssr.dll"
+if ($SRRuntimeDll) {
+    $srRuntime = (Resolve-Path -LiteralPath $SRRuntimeDll).Path
+} else {
+    $bundledSrRuntime = Join-Path $runtimeDir "nvngx_dlss.dll"
+    if (Test-Path -LiteralPath $bundledSrRuntime -PathType Leaf) {
+        $srRuntime = (Resolve-Path -LiteralPath $bundledSrRuntime).Path
+    } else {
+        try {
+            $srRuntime = Find-One $vapourKit "nvngx_dlss.dll"
+        } catch {
+            throw "Could not find bundled nvngx_dlss.dll. Supply -SRRuntimeDll with a compatible authorized NVIDIA DLSS SR runtime."
+        }
+    }
+}
+if ([IO.Path]::GetFileName($srRuntime) -ine "nvngx_dlss.dll") {
+    throw "SRRuntimeDll must point to nvngx_dlss.dll."
+}
 
-$runtimeDir = Join-Path $repo "runtime"
-New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
-Copy-Item -LiteralPath $nrRuntime -Destination (Join-Path $runtimeDir "nvngx_dlssnr.dll") -Force
-Copy-Item -LiteralPath $nrPlugin -Destination (Join-Path $runtimeDir "vsdlssnr.dll") -Force
-Copy-Item -LiteralPath $srPlugin -Destination (Join-Path $runtimeDir "vsdlsssr.dll") -Force
-Copy-Item -LiteralPath $srRuntime -Destination (Join-Path $runtimeDir "nvngx_dlss.dll") -Force
+function Copy-If-Different([string] $Source, [string] $Destination) {
+    if ([IO.Path]::GetFullPath($Source) -ne [IO.Path]::GetFullPath($Destination)) {
+        Copy-Item -LiteralPath $Source -Destination $Destination -Force
+    }
+}
+Copy-If-Different $nrRuntime (Join-Path $runtimeDir "nvngx_dlssnr.dll")
+Copy-If-Different $srRuntime (Join-Path $runtimeDir "nvngx_dlss.dll")
 
 if (-not $TempDirectory) {
     $TempDirectory = Join-Path ([IO.Path]::GetTempPath()) "comfyui-dlss5"
@@ -55,6 +92,7 @@ $config = [ordered]@{
     nr_runtime = (Join-Path $runtimeDir "nvngx_dlssnr.dll")
     sr_plugin = (Join-Path $runtimeDir "vsdlsssr.dll")
     sr_runtime = (Join-Path $runtimeDir "nvngx_dlss.dll")
+    dlssg_runtime = (Join-Path $runtimeDir "dlssg\nvngx_dlssg.dll")
     temp_dir = (Resolve-Path -LiteralPath $TempDirectory).Path
     timeout_seconds = 0
 }

@@ -667,7 +667,6 @@ class DLSS5FullPipeline:
                 local_structure,
                 skin_structure,
                 auto_mask,
-                "1x",
                 depth_inverted,
                 depth=depth[sl],
                 motion_vectors=motion_vectors[sl],
@@ -754,7 +753,6 @@ class DLSS5EasyPipeline:
                 local_structure,
                 skin_structure,
                 True,
-                "1x",
                 True,
                 depth=depth,
                 motion_vectors=motion,
@@ -808,7 +806,6 @@ class DLSS5NeuralRendering:
                     {"default": -1.0, "min": -1.0, "max": 2.0, "step": 0.01},
                 ),
                 "auto_mask": ("BOOLEAN", {"default": True}),
-                "pre_scale": (["1x", "2x", "4x"],),
                 "depth_inverted": ("BOOLEAN", {"default": False}),
             },
             "optional": {
@@ -832,7 +829,6 @@ class DLSS5NeuralRendering:
         local_structure,
         skin_structure,
         auto_mask,
-        pre_scale,
         depth_inverted,
         effect_mask=None,
         depth=None,
@@ -840,15 +836,6 @@ class DLSS5NeuralRendering:
     ):
         python, plugin, snippet = _runtime_paths()
         source = image.detach().to(device="cpu", dtype=torch.float32)
-        factor = int(pre_scale[0])
-        if factor != 1:
-            source = F.interpolate(
-                source.permute(0, 3, 1, 2),
-                scale_factor=factor,
-                mode="bicubic",
-                align_corners=False,
-                antialias=True,
-            ).permute(0, 2, 3, 1)
         settings = {
             "style": int(style.split()[0]),
             "style_strength": style_strength,
@@ -1292,13 +1279,23 @@ class DLSS5RuntimeSetup:
         frame_generation_dir = runtime_dir / "dlssg"
         frame_generation_dir.mkdir(parents=True, exist_ok=True)
         neural_runtime = runtime_dir / "nvngx_dlssnr.dll"
+        sr_runtime = runtime_dir / "nvngx_dlss.dll"
+        dlssg_runtime = frame_generation_dir / "nvngx_dlssg.dll"
+        bundled_wrappers = (runtime_dir / "vsdlssnr.dll", runtime_dir / "vsdlsssr.dll")
+        wrapper_state = "READY" if all(path.is_file() for path in bundled_wrappers) else "MISSING"
         if action == "Check location":
-            state = "FOUND" if neural_runtime.is_file() else "MISSING"
+            neural_state = "READY" if neural_runtime.is_file() else "MISSING"
+            sr_state = "READY" if sr_runtime.is_file() else "MISSING"
+            dlssg_state = "READY" if dlssg_runtime.is_file() else "MISSING"
             return (
-                f"Neural runtime: {state}\nCopy nvngx_dlssnr.dll to:\n{neural_runtime}\n\n"
+                f"Bundled NVIDIA SR runtime: {sr_state}\n{sr_runtime}\n"
+                f"Bundled NVIDIA NR runtime: {neural_state}\n{neural_runtime}\n\n"
+                f"Bundled VapourSynth wrappers: {wrapper_state}\n"
+                f"Expected: {bundled_wrappers[0].name}, {bundled_wrappers[1].name}\n\n"
                 "Optional Frame Generation files belong together in:\n"
                 f"{frame_generation_dir}\n"
-                "Required names: dlssg-worker.exe and nvngx_dlssg.dll\n\n"
+                f"Bundled NVIDIA FG runtime: {dlssg_state}\n"
+                f"Expected runtime: {dlssg_runtime.name}; worker: dlssg-worker.exe\n\n"
                 "Then select 'Install verified VapourKit', enable confirm_download, and queue this node again.",
             )
         if not confirm_download:

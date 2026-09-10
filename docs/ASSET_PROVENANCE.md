@@ -28,7 +28,7 @@ The four `comfyui-vda-*` and `comfyui-flashdepth-*` PNGs were captured from a lo
 
 ## Runtime proof derivatives
 
-The files under `docs/images/proofs/` derive from the two synthetic benchmark sources above. They were created locally on 2026-09-02 with the user-supplied NVIDIA runtime through the same VapourSynth bridges used by the ComfyUI nodes. The included `runtime-reports.txt` files record the reported runtime feature, dimensions, guides, and SR preset.
+The files under `docs/images/proofs/` derive from the two synthetic benchmark sources above. They were created locally on 2026-09-02 with the NVIDIA runtime that is now bundled in `runtime/`, through the same VapourSynth bridges used by the ComfyUI nodes. The included `runtime-reports.txt` files record the reported runtime feature, dimensions, guides, and SR preset.
 
 The overview sheets resize panels proportionally. The detail sheets enlarge 1× crops by an exact 2× using nearest-neighbor sampling and place them beside native 2× output crops. Neither sheet changes an image's aspect ratio.
 
