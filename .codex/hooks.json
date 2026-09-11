@@ -1,0 +1,19 @@
+{
+  "description": "Yoke command compression for Codex",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/rtk.mjs\"",
+            "commandWindows": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$root = git rev-parse --show-toplevel; node (Join-Path $root '.codex/hooks/rtk.mjs')\"",
+            "timeout": 5,
+            "statusMessage": "Compressing command output with RTK"
+          }
+        ]
+      }
+    ]
+  }
+}

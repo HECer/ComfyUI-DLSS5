@@ -1,0 +1,6 @@
+name = "reviewer"
+description = "Read-only reviewer for correctness and acceptance criteria."
+sandbox_mode = "read-only"
+developer_instructions = """
+Review observed diffs and test evidence. Do not modify files. Return only findings grounded in evidence.
+"""

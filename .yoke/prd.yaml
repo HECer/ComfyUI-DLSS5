@@ -1,0 +1,284 @@
+- id: DLSS-1
+  title: Repeatable setup and configuration preservation
+  priority: 1
+  needs: []
+  area: dlss-usability
+  acceptance:
+    - id: config_roundtrip
+      text: Read UTF-8 with or without BOM identically; report malformed/non-object
+        configuration instead of silently returning empty; preserve custom
+        temp_dir, timeout and unrelated valid settings when reinstalling.
+      verify:
+        - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
+          config_roundtrip
+    - id: setup_repeatable
+      text: Repeated manual setup accepts an existing junction to this repository,
+        rejects a conflicting target before writes, writes BOM-safe JSON
+        atomically, and preserves prior usable config on failure.
+      verify:
+        - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
+          setup_repeatable
+  assessment:
+    taskClass: debugging
+    difficulty: medium
+    uncertainty: medium
+    risk: medium
+    scope: medium
+    testability: high
+    reason: Existing Windows native bridge requires behavioral and workflow
+      compatibility checks.
+    approach: Inspect nodes._runtime_config, install_runtime.install and setup.ps1.
+      Add failing regressions first, including execution of PowerShell fixture
+      setup with harmless temporary files/interpreter when feasible. Keep
+      optional absent config behavior. Validate configuration before modifying
+      files. Shared small config helpers are fine; avoid wholesale
+      restructuring.
+  passes: false
+  assessmentFor: b088fe97f928373b8de4a05ac29e10a6f363157ea3f96ae769d8a8f90aa6b63b
+- id: DLSS-2
+  title: Separate optional Frame Generation installation
+  priority: 2
+  needs:
+    - DLSS-1
+  area: dlss-usability
+  acceptance:
+    - id: base_install
+      text: Base installer succeeds without FG runtime/worker and never downloads FG;
+        missing required SR/NR assets fail before optional downloads; existing
+        worker and config are preserved.
+      verify:
+        - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
+          base_install
+    - id: fg_install
+      text: Explicit FG installation validates its runtime and worker hashes, retains
+        mismatch protection/backups, and is available through appended Setup
+        action and headless CLI flags without changing existing action values.
+      verify:
+        - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
+          fg_install
+  assessment:
+    taskClass: implementation
+    difficulty: medium
+    uncertainty: medium
+    risk: medium
+    scope: medium
+    testability: high
+    reason: Existing Windows native bridge requires behavioral and workflow
+      compatibility checks.
+    approach: Change install_runtime.py, install_runtime.ps1 and setup node
+      narrowly. Existing Install verified VapourKit means base install; append
+      explicit FG action. Keep direct install_dlssg_worker behavior and tests.
+      Simulate downloads/extraction, no network. Preserve previous optional FG
+      configuration during base reinstall. Provide actionable retry for
+      incomplete extraction without deleting unknown directories.
+  passes: false
+  assessmentFor: 467184d5b46346f953d7fda0045a586d1ee407df657ba03818b9cdba245c328d
+- id: DLSS-3
+  title: Node descriptions and backward-compatible navigation
+  priority: 3
+  needs:
+    - DLSS-2
+  area: dlss-usability
+  acceptance:
+    - id: node_help
+      text: All 14 nodes expose useful descriptions and tooltips for every user-facing
+        input; help explains ignored controls, motion encoding/direction, scale
+        pixel growth, skin -1, paired NR guides, experimental nature and model
+        first-use downloads.
+      verify:
+        - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
+          node_help
+    - id: workflow_compatibility
+      text: Existing node IDs, input and output contracts, ordered widget
+        choices/defaults and bundled workflow values remain compatible while
+        categories are consistently grouped under Experimental DLSS Bridge;
+        Easy-only inactive controls are explained without deleting widgets.
+      verify:
+        - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
+          workflow_compatibility
+  assessment:
+    taskClass: implementation
+    difficulty: medium
+    uncertainty: medium
+    risk: medium
+    scope: medium
+    testability: high
+    reason: Existing Windows native bridge requires behavioral and workflow
+      compatibility checks.
+    approach: Use DESCRIPTION and INPUT_TYPES tooltip metadata. Preserve IDs,
+      dropdown strings and ordering. Group into Easy/root, advanced, guides,
+      video, setup. Capture original schema fixture from git show
+      9d1c34b:nodes.py in a temporary isolated module, normalize
+      description/category/tooltip additions only. Test actual bundled workflow
+      widget and link compatibility. Avoid new frontend JS dependency for
+      disabling controls; clear tooltips sufficient.
+  passes: false
+  assessmentFor: fe5b5d62734e6236244e98bd99f5b2493f2636f3df6c08e2dff7baac922b90cc
+- id: DLSS-4
+  title: Truthful runtime diagnostics and early preflight
+  priority: 4
+  needs:
+    - DLSS-3
+  area: dlss-usability
+  acceptance:
+    - id: runtime_diagnostics
+      text: Status separates missing/LFS-pointer files, Python/VapourSynth import and
+        plugin-load probes; reports actionable failures with bounded subprocess
+        timeouts, never calls file existence runtime-ready; refreshes after
+        external config change and can display results without third-party text
+        nodes.
+      verify:
+        - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
+          runtime_diagnostics
+    - id: early_preflight
+      text: Easy operation checks ONLY required SR/NR runtime components before
+        depth/motion model work; invalid configured Python path or unusable
+        runtime fails before downloads; valid operation does not require unused
+        stages.
+      verify:
+        - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
+          early_preflight
+  assessment:
+    taskClass: debugging
+    difficulty: medium
+    uncertainty: medium
+    risk: medium
+    scope: medium
+    testability: high
+    reason: Existing Windows native bridge requires behavioral and workflow
+      compatibility checks.
+    approach: Add bounded isolated import/LoadPlugin probes, no inference by
+      default. Optional appended smoke action may run a tiny synthetic sample if
+      safe; report runtime inference untested unless actually run. Preserve
+      original no-argument status method, append optional fields if needed.
+      Ensure OUTPUT_NODE and UI text return contract are handled correctly. Add
+      IS_CHANGED/fingerprint for external state, avoid caching stale
+      diagnostics. Setup should report directly via Comfy UI text. Redacted
+      support report preferred, detailed paths local. Tests mock probes and
+      model call order.
+  passes: false
+  assessmentFor: 1e23760fcbaccbaf5e23a0e7f13ffbb6d79a13b8d32d9eb0d445af42a0d93f44
+- id: DLSS-5
+  title: Honor bounded mode for all Easy operations
+  priority: 5
+  needs:
+    - DLSS-4
+  area: dlss-usability
+  acceptance:
+    - id: bounded_operations
+      text: Long-video/Fast-preview Easy presets apply bounded windows to Upscale only
+        and Neural rendering only as well as combined operation; merge outputs
+        with exact chronological frame count, including short final windows and
+        overlap larger than remaining frames.
+      verify:
+        - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
+          bounded_operations
+    - id: truthful_presets
+      text: Report resolved Auto scenario, actual execution mode, relevant active
+        settings and frame dimensions/count; persistent single-stage paths
+        retain a single unchanged native call and default presets/depth models
+        remain unchanged.
+      verify:
+        - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
+          truthful_presets
+  assessment:
+    taskClass: debugging
+    difficulty: medium
+    uncertainty: medium
+    risk: medium
+    scope: medium
+    testability: high
+    reason: Existing Windows native bridge requires behavioral and workflow
+      compatibility checks.
+    approach: Reuse _pipeline_windows and _overlap_add carefully. Add deterministic
+      frame-index fake SR/NR tests across 1,2,17,33,96,97,100 frames and scale
+      cases; do not merely assert call count. Assert bounded versus persistent
+      identity results align and no duplicate/drop/reorder. Maintain public
+      signatures and style settings. Memory-efficient limits native windows, not
+      the full Comfy IMAGE batch; describe honestly.
+  passes: false
+  assessmentFor: a06f3d08476ad3c0610def8a8ec0cd6c579f466b15e3bdcf9c70ce977e61a75e
+- id: DLSS-6
+  title: Progress, responsive cancellation and advisory memory estimates
+  priority: 6
+  needs:
+    - DLSS-5
+  area: dlss-usability
+  acceptance:
+    - id: progress_cancel
+      text: Depth/flow/pipeline work publishes Comfy progress; long SR/NR subprocesses
+        allow Comfy cancellation and cleanly terminate/reap children plus temp
+        files; timeout disabled still permits cancellation; failures preserve
+        useful bounded stderr.
+      verify:
+        - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
+          progress_cancel
+    - id: memory_advice
+      text: Before guide inference, Easy reports frame count, input/output resolution,
+        estimated float32 array/temp storage and available disk warning where
+        relevant; estimates scale with resolution and operation, explicitly
+        exclude full VRAM prediction, and never change selected presets
+        automatically.
+      verify:
+        - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
+          memory_advice
+  assessment:
+    taskClass: debugging
+    difficulty: medium
+    uncertainty: medium
+    risk: medium
+    scope: medium
+    testability: high
+    reason: Existing Windows native bridge requires behavioral and workflow
+      compatibility checks.
+    approach: Use optional Comfy imports with standalone-test fallback. Centralize
+      only necessary subprocess lifecycle handling using Popen polling plus
+      bounded/tail logs or temp log files to avoid pipe deadlock, preserve
+      TimeoutExpired semantics. Test with short real Python child processes,
+      injected cancellation, missing Comfy modules, timeouts, nonzero exits and
+      cleanup. Emit progress in model loops and bridge per-frame protocol when
+      practical. Support all operations; do not introduce arbitrary five-minute
+      timeouts or automatically change quality. Keep output schema compatible.
+  passes: false
+  assessmentFor: b79a57b1405dbcdd61b6b583b880520d30daf57cf5d40495f223bb1e4f364d09
+- id: DLSS-7
+  title: Concise first-run guide and integrated regression evidence
+  priority: 7
+  needs:
+    - DLSS-6
+  area: dlss-usability
+  acceptance:
+    - id: first_run
+      text: README starts with installation, base runtime check, bundled Easy workflow
+        and first image; docs consistently describe separate optional FG
+        install, repeatable setup, diagnostics, progress/cancellation, memory
+        limits and Easy DA-V2 versus VDA; all local documentation links resolve.
+      verify:
+        - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
+          first_run
+    - id: integration_regression
+      text: An integrated synthetic Easy journey exercises all operations through
+        preflight, guides, bounded/persistent routing, reports and
+        schema-compatible results; all shipped workflow node IDs/widget
+        values/links are validated, and PowerShell scripts parse successfully.
+      verify:
+        - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
+          integration_regression
+  assessment:
+    taskClass: implementation
+    difficulty: medium
+    uncertainty: medium
+    risk: medium
+    scope: medium
+    testability: high
+    reason: Existing Windows native bridge requires behavioral and workflow
+      compatibility checks.
+    approach: Update README, workflows/README, TROUBLESHOOTING and relevant runtime
+      docs, preserving scientific limitations and asset disclosures. Put
+      detailed/manual paths below quickstart. Add focused integrated tests using
+      fake native stages without model downloads. Add an opt-in tiny real SR/NR
+      smoke test if native environment permits, never claim quality verified
+      from mocks. Review docs against final implementation. Run read-only
+      audit-provenance on README after edits, no removal.
+  passes: false
+  assessmentFor: 77c0a572c6cdd0a4d3654dd48aa773cf76f9b8d22323da9b68dbec880bb402cc
