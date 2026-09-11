@@ -115,6 +115,7 @@ def main() -> None:
             result[index, :, :, plane] = np.clip(
                 np.asarray(frame[plane])[:, :width], 0.0, 1.0
             )
+        print(f"DLSS_PROGRESS {index + 1} {len(frames)}", flush=True)
     if original_count == 1:
         single = np.asarray(result[-1:]).copy()
         del result

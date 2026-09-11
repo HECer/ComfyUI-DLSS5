@@ -64,6 +64,7 @@ def main():
         f = up.get_frame(i)
         for q in range(3):
             result[i, :, :, q] = np.clip(np.asarray(f[q])[:, :ow], 0.0, 1.0)
+        print(f"DLSS_PROGRESS {i + 1} {count}", flush=True)
     result.flush()
 
 

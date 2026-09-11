@@ -251,7 +251,7 @@
       verify:
         - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
           memory_advice
-  passes: false
+  passes: true
   needs:
     - DLSS-5
   area: dlss-usability

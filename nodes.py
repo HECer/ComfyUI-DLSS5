@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from contextlib import ExitStack
 import json
 import os
 from pathlib import Path
+import re
+import shutil
 import subprocess
 import tempfile
+import time
 from fractions import Fraction
 
 import numpy as np
@@ -30,6 +34,105 @@ PACKAGE = Path(__file__).resolve().parent
 PROJECT = PACKAGE.parent
 _DEPTH_CACHE = {}
 _RAFT_CACHE = {}
+
+
+def _check_cancel():
+    try:
+        from comfy.model_management import throw_exception_if_processing_interrupted
+    except ImportError:
+        return
+    throw_exception_if_processing_interrupted()
+
+
+class _Progress:
+    def __init__(self, total):
+        self.total = total
+        try:
+            from comfy.utils import ProgressBar
+        except ImportError:
+            self.bar = None
+        else:
+            self.bar = ProgressBar(total)
+        self.update(0)
+
+    def update(self, value):
+        _check_cancel()
+        if self.bar is not None:
+            self.bar.update_absolute(value, self.total)
+
+
+def _run_process(command, timeout=None):
+    _check_cancel()
+    with tempfile.TemporaryDirectory(prefix="comfy-dlss-log-", dir=_runtime_temp_dir()) as tmp:
+        stdout_path, stderr_path = Path(tmp) / "stdout", Path(tmp) / "stderr"
+        with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
+            process = subprocess.Popen(command, stdout=stdout, stderr=stderr)
+            started = time.monotonic()
+            try:
+                with stdout_path.open("rb") as out_reader, stderr_path.open("rb") as err_reader:
+                    def tail(reader):
+                        reader.seek(0, os.SEEK_END)
+                        reader.seek(max(0, reader.tell() - 8192))
+                        return reader.read(8192)
+
+                    progress, last = None, None
+                    while True:
+                        _check_cancel()
+                        finished = process.poll() is not None
+                        out, err = tail(out_reader), tail(err_reader)
+                        updates = re.findall(rb"(?m)^DLSS_PROGRESS (\d+) (\d+)\r?\n", out)
+                        if updates and updates[-1] != last:
+                            value, total = map(int, updates[-1])
+                            if progress is None:
+                                progress = _Progress(total)
+                            progress.update(value)
+                            last = updates[-1]
+                        if finished:
+                            return subprocess.CompletedProcess(
+                                command, process.returncode,
+                                out.decode("utf-8", errors="replace"),
+                                err.decode("utf-8", errors="replace"),
+                            )
+                        if timeout is not None and time.monotonic() - started >= timeout:
+                            raise subprocess.TimeoutExpired(command, timeout, output=out, stderr=err)
+                        time.sleep(0.1)
+            finally:
+                if process.poll() is None:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=1)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                process.wait()
+
+
+def _easy_memory_advice(shape, operation, scale, preset):
+    count, height, width, _ = shape
+    factor = 1 if operation == "Neural rendering only" else int(scale[0])
+    pixels, output_pixels = height * width, height * width * factor**2
+    arrays = count * 4 * (9 * pixels + 3 * output_pixels)
+    if operation == "Upscale + neural rendering":
+        arrays += count * 4 * 3 * output_pixels
+    window = count if preset["processing_mode"] == "Persistent full sequence" else min(count, preset["chunk_size"] + preset["overlap"])
+    sr_temp = window * 4 * (6 * pixels + 3 * output_pixels)
+    nr_temp = 4 * output_pixels * (6 * window + 3 * max(2, window))
+    temp = sr_temp if operation == "Upscale only" else nr_temp
+    if operation == "Upscale + neural rendering":
+        temp = max(sr_temp, nr_temp)
+    report = (
+        f"Storage advice: {count} frames; input={width}x{height}; output={width*factor}x{height*factor}; "
+        f"float32 arrays={arrays} bytes; peak native temp={temp} bytes (array payloads). "
+        "Arrays include full input, RGB guides, output and combined SR intermediate; "
+        "estimate excludes additional working copies, model weights, file/log overhead and full VRAM prediction. "
+    )
+    try:
+        free = shutil.disk_usage(_runtime_temp_dir()).free
+        report += f"Available temp disk={free} bytes."
+        if free < temp:
+            report += " WARNING: estimated temp storage exceeds available disk; consider fewer frames or a bounded scenario."
+    except OSError as exc:
+        report += f"Available temp disk unknown: {exc}."
+    return report
 
 
 def _iter_temporal_chunks(frame_count: int, chunk_size: int, history_overlap: int):
@@ -122,33 +225,39 @@ def _save_guides_chunked(
 ):
     count = depth.shape[0]
     height, width = size
-    depth_file = np.lib.format.open_memmap(
-        depth_path, mode="w+", dtype=np.float32, shape=(count, height, width)
-    )
-    motion_file = np.lib.format.open_memmap(
-        motion_path, mode="w+", dtype=np.float32, shape=(count, height, width, 2)
-    )
-    for start in range(0, count, chunk_size):
-        stop = min(start + chunk_size, count)
-        d = F.interpolate(
-            depth[start:stop].detach().cpu().float().permute(0, 3, 1, 2),
-            size=size,
-            mode="bilinear",
-            align_corners=False,
-        )[:, 0]
-        mv = F.interpolate(
-            motion_vectors[start:stop].detach().cpu().float().permute(0, 3, 1, 2),
-            size=size,
-            mode="bilinear",
-            align_corners=False,
-        )[:, :2]
-        mv = (mv - 0.5) * 2.0
-        mv[:, 0] *= width
-        mv[:, 1] *= height
-        depth_file[start:stop] = d.numpy()
-        motion_file[start:stop] = mv.permute(0, 2, 3, 1).numpy()
-    depth_file.flush()
-    motion_file.flush()
+    progress = _Progress(count)
+    with ExitStack() as cleanup:
+        depth_file = np.lib.format.open_memmap(
+            depth_path, mode="w+", dtype=np.float32, shape=(count, height, width)
+        )
+        cleanup.callback(depth_file._mmap.close)
+        motion_file = np.lib.format.open_memmap(
+            motion_path, mode="w+", dtype=np.float32, shape=(count, height, width, 2)
+        )
+        cleanup.callback(motion_file._mmap.close)
+        for start in range(0, count, chunk_size):
+            _check_cancel()
+            stop = min(start + chunk_size, count)
+            d = F.interpolate(
+                depth[start:stop].detach().cpu().float().permute(0, 3, 1, 2),
+                size=size,
+                mode="bilinear",
+                align_corners=False,
+            )[:, 0]
+            mv = F.interpolate(
+                motion_vectors[start:stop].detach().cpu().float().permute(0, 3, 1, 2),
+                size=size,
+                mode="bilinear",
+                align_corners=False,
+            )[:, :2]
+            mv = (mv - 0.5) * 2.0
+            mv[:, 0] *= width
+            mv[:, 1] *= height
+            depth_file[start:stop] = d.numpy()
+            motion_file[start:stop] = mv.permute(0, 2, 3, 1).numpy()
+            progress.update(stop)
+        depth_file.flush()
+        motion_file.flush()
 
 
 def _runtime_temp_dir() -> Path:
@@ -698,9 +807,7 @@ class DLSSSuperResolution:
                 "--quality",
                 str(self.QUALITY[quality]),
             ]
-            p = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=_runtime_timeout()
-            )
+            p = _run_process(cmd, timeout=_runtime_timeout())
             if p.returncode:
                 raise RuntimeError(
                     "DLSS Super Resolution failed:\n" + p.stdout + p.stderr
@@ -761,13 +868,17 @@ class DLSS5FullPipeline:
     ):
         output = None
         reports = []
-        for start, stop in _pipeline_windows(
+        window_count = 1 if processing_mode == "Persistent full sequence" else (image.shape[0] + chunk_size - 1) // chunk_size
+        progress = _Progress(window_count * 2)
+        for index, (start, stop) in enumerate(_pipeline_windows(
             image.shape[0], chunk_size, history_overlap, processing_mode
-        ):
+        )):
+            _check_cancel()
             sl = slice(start, stop)
             up, sr = DLSSSuperResolution().upscale(
                 image[sl], depth[sl], motion_vectors[sl], scale, sr_quality
             )
+            progress.update(index * 2 + 1)
             out, nr = DLSS5NeuralRendering().render(
                 up,
                 style,
@@ -780,6 +891,7 @@ class DLSS5FullPipeline:
                 depth=depth[sl],
                 motion_vectors=motion_vectors[sl],
             )
+            progress.update(index * 2 + 2)
             output = (
                 out if output is None else _overlap_add(output, out, history_overlap)
             )
@@ -846,17 +958,23 @@ class DLSS5EasyPipeline:
         if not passed:
             raise RuntimeError("DLSS Easy preflight failed:\n" + diagnostic)
         preset = _easy_preset(scenario, int(image.shape[0]))
+        advice = _easy_memory_advice(image.shape, operation, scale, preset)
+        print(advice, flush=True)
+        progress = _Progress(4)
         depth = DLSS5DepthAnythingV2().estimate(image, "Small (recommended)", True, 4)[
             0
         ]
+        progress.update(1)
         if preset["flow_model"] == "Optical Flow (fastest)":
             motion = DLSS5OpticalFlow().estimate(image, 0.5, 5, 21)[0]
         else:
             motion = DLSS5RAFTFlow().estimate(
                 image, preset["flow_model"], preset["flow_chunk"]
             )[0]
+        progress.update(2)
         if image.shape[0] > 1:
             depth = DLSS5TemporalDepthStabilize().stabilize(depth, motion, 0.7, 0.08)[0]
+        progress.update(3)
         style, base_strength, local_structure, skin_structure = self.LOOKS[look]
         if operation == "Upscale + neural rendering":
             output, report = DLSS5FullPipeline().run(
@@ -879,6 +997,7 @@ class DLSS5EasyPipeline:
         else:
             output = None
             reports = []
+            native_progress = _Progress(image.shape[0])
             for start, stop in _pipeline_windows(
                 image.shape[0], preset["chunk_size"], preset["overlap"],
                 preset["processing_mode"],
@@ -905,6 +1024,7 @@ class DLSS5EasyPipeline:
                         depth=frame_depth,
                         motion_vectors=frame_motion,
                     )
+                native_progress.update(stop)
                 output = out if output is None else _overlap_add(output, out, preset["overlap"])
                 reports.append(f"frames {start}-{stop - 1}: {report}")
             report = "\n".join(reports)
@@ -929,7 +1049,8 @@ class DLSS5EasyPipeline:
                 f"max_window={preset['chunk_size'] + preset['overlap']} frames; "
                 "complete ComfyUI IMAGE input and output remain in memory\n"
             )
-        return output, summary + report
+        progress.update(4)
+        return output, summary + advice + "\n" + report
 
 
 class DLSS5NeuralRendering:
@@ -1027,9 +1148,7 @@ class DLSS5NeuralRendering:
                     depth, motion_vectors, guide_size, depth_path, motion_path
                 )
                 command += ["--depth", str(depth_path), "--mvec", str(motion_path)]
-            process = subprocess.run(
-                command, capture_output=True, text=True, timeout=_runtime_timeout()
-            )
+            process = _run_process(command, timeout=_runtime_timeout())
             if process.returncode:
                 raise RuntimeError("DLSS 5 failed:\n" + process.stdout + process.stderr)
             result = torch.from_numpy(np.load(output_path))
@@ -1085,7 +1204,9 @@ class DLSS5OpticalFlow:
         count, height, width, _ = array.shape
         encoded = np.full((count, height, width, 3), 0.5, dtype=np.float32)
         previous = None
+        progress = _Progress(count)
         for index in range(count):
+            _check_cancel()
             gray = cv2.cvtColor(
                 np.clip(array[index] * 255, 0, 255).astype(np.uint8), cv2.COLOR_RGB2GRAY
             )
@@ -1110,6 +1231,7 @@ class DLSS5OpticalFlow:
                     0.5 + flow[:, :, 1] / (2 * height), 0, 1
                 )
             previous = gray
+            progress.update(index + 1)
         return (torch.from_numpy(encoded).to(images.device),)
 
 
@@ -1131,6 +1253,7 @@ class DLSS5RAFTFlow:
     CATEGORY = "Experimental DLSS Bridge/guides"
 
     def estimate(self, images, model, chunk_size):
+        progress = _Progress(images.shape[0])
         from torchvision.models.optical_flow import (
             raft_large,
             raft_small,
@@ -1160,8 +1283,10 @@ class DLSS5RAFTFlow:
         padded_h = max(128, ((height + 7) // 8) * 8)
         padded_w = max(128, ((width + 7) // 8) * 8)
         encoded = torch.full((count, height, width, 3), 0.5, device="cpu")
+        progress.update(1)
         with torch.inference_mode():
             for start in range(1, count, chunk_size):
+                _check_cancel()
                 stop = min(start + chunk_size, count)
                 current, previous = _raft_frame_pairs(source, start, stop)
                 current = F.interpolate(
@@ -1190,6 +1315,7 @@ class DLSS5RAFTFlow:
                     (0.5 + flow[:, 1] / (2 * height)).clamp(0, 1).cpu()
                 )
                 del current, previous, flow
+                progress.update(stop)
         return (encoded.to(images.device),)
 
 
@@ -1234,7 +1360,10 @@ class DLSS5TemporalDepthStabilize:
         base_x = xs.float()[None]
         base_y = ys.float()[None]
         stabilized = [source[0]]
+        progress = _Progress(count)
+        progress.update(1)
         for index in range(1, count):
+            _check_cancel()
             flow_x = (motion[index : index + 1, 0] - 0.5) * 2.0 * width
             flow_y = (motion[index : index + 1, 1] - 0.5) * 2.0 * height
             grid_x = 2.0 * (base_x + flow_x) / max(width - 1, 1) - 1.0
@@ -1254,6 +1383,7 @@ class DLSS5TemporalDepthStabilize:
             )
             blend = float(strength) * confidence
             stabilized.append(current * (1.0 - blend) + warped * blend)
+            progress.update(index + 1)
         result = (
             torch.stack(stabilized)
             .permute(0, 2, 3, 1)
@@ -1288,6 +1418,7 @@ class DLSS5DepthAnythingV2:
     CATEGORY = "Experimental DLSS Bridge/guides"
 
     def estimate(self, images, model, temporal_normalization, chunk_size):
+        progress = _Progress(images.shape[0])
         from transformers import AutoImageProcessor, AutoModelForDepthEstimation
 
         model_id = self.MODELS[model]
@@ -1308,6 +1439,7 @@ class DLSS5DepthAnythingV2:
         chunks = []
         with torch.inference_mode():
             for start in range(0, source.shape[0], chunk_size):
+                _check_cancel()
                 frames = source[start : start + chunk_size]
                 inputs = processor(
                     images=[
@@ -1323,6 +1455,7 @@ class DLSS5DepthAnythingV2:
                 )[:, 0]
                 chunks.append(part.cpu())
                 del inputs, part
+                progress.update(min(start + chunk_size, source.shape[0]))
         depth = torch.cat(chunks, dim=0)
         if temporal_normalization:
             sample = depth[:, ::8, ::8].flatten()
@@ -1357,10 +1490,12 @@ class DLSS5VideoDepthAnything:
     CATEGORY = "Experimental DLSS Bridge/guides"
 
     def estimate(self, images, input_size, precision):
+        progress = _Progress(1)
         from .video_depth_backend import infer_vda_small
 
         size = int(input_size.split()[0])
         depth = infer_vda_small(images, input_size=size, fp32=precision == "FP32")
+        progress.update(1)
         return (depth,)
 
 
@@ -1386,9 +1521,12 @@ class DLSS5FlashDepth:
     CATEGORY = "Experimental DLSS Bridge/guides/optional"
 
     def estimate(self, images, variant, flashdepth_python, flashdepth_repository, fps):
+        progress = _Progress(1)
         from .video_depth_backend import infer_flashdepth_external
 
-        return (infer_flashdepth_external(images, variant, flashdepth_python, flashdepth_repository, fps),)
+        depth = infer_flashdepth_external(images, variant, flashdepth_python, flashdepth_repository, fps)
+        progress.update(1)
+        return (depth,)
 
 
 class DLSS5RuntimeStatus:

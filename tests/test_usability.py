@@ -10,6 +10,7 @@ import stat
 import subprocess
 import sys
 import types
+import time
 
 import pytest
 import torch
@@ -27,6 +28,312 @@ def _load_module(name: str, path: Path):
 
 nodes = _load_module("usability_nodes", ROOT / "nodes.py")
 install_runtime = _load_module("usability_install_runtime", ROOT / "install_runtime.py")
+
+
+class ComfyCancelled(Exception):
+    pass
+
+
+@pytest.fixture
+def comfy_progress(monkeypatch):
+    bars = []
+    state = types.SimpleNamespace(cancel=False)
+
+    class ProgressBar:
+        def __init__(self, total):
+            self.total, self.values = total, []
+            bars.append(self)
+
+        def update_absolute(self, value, total=None):
+            self.values.append(value)
+
+    def check():
+        if state.cancel:
+            raise ComfyCancelled("cancelled by Comfy")
+
+    monkeypatch.setitem(sys.modules, "comfy", types.ModuleType("comfy"))
+    monkeypatch.setitem(sys.modules, "comfy.utils", types.SimpleNamespace(ProgressBar=ProgressBar))
+    monkeypatch.setitem(sys.modules, "comfy.model_management", types.SimpleNamespace(throw_exception_if_processing_interrupted=check))
+    return bars, state
+
+
+@pytest.mark.parametrize("stage", ["sr", "nr"])
+@pytest.mark.parametrize("ending", ["cancel", "timeout", "failure", "success"])
+def test_progress_cancel_native_child_lifecycle(monkeypatch, tmp_path, comfy_progress, stage, ending):
+    assert hasattr(nodes, "_run_process"), "native calls need a shared cancellable lifecycle"
+    bars, state = comfy_progress
+    children = []
+    ready = []
+    popen = subprocess.Popen
+    script = (
+        "import sys,time,pathlib; held_input=open(sys.argv[2], 'rb'); "
+        "sys.stdout.write('x'*100000); sys.stdout.flush(); "
+        "sys.stderr.write('y'*100000+'USEFUL_ERROR_TAIL'); sys.stderr.flush(); "
+        "print('\\nDLSS_PROGRESS 1 2', flush=True); "
+        "pathlib.Path(sys.argv[3]).with_suffix('.ready').write_text('ready'); "
+    )
+    if ending in ("cancel", "timeout"):
+        script += "time.sleep(30)"
+    elif ending == "failure":
+        script += "sys.exit(7)"
+    else:
+        script += "import numpy as np; np.save(sys.argv[3], np.load(sys.argv[2])); print('DLSS_PROGRESS 2 2', flush=True)"
+
+    def launch(command, **kwargs):
+        ready.append(Path(command[3]).with_suffix(".ready"))
+        child = popen([sys.executable, "-c", script, *command[1:]], **kwargs)
+        children.append(child)
+        return child
+
+    def check():
+        if ending == "cancel" and ready and ready[0].exists():
+            state.cancel = True
+            raise ComfyCancelled("cancelled by Comfy")
+
+    monkeypatch.setattr(nodes.subprocess, "Popen", launch)
+    monkeypatch.setattr(sys.modules["comfy.model_management"], "throw_exception_if_processing_interrupted", check)
+    monkeypatch.setattr(nodes, "_runtime_temp_dir", lambda: tmp_path)
+    monkeypatch.setattr(nodes, "_runtime_timeout", lambda: 0.4 if ending == "timeout" else None)
+    monkeypatch.setattr(nodes, "_sr_runtime_paths", lambda: (Path(sys.executable), Path("plugin"), Path("runtime")))
+    monkeypatch.setattr(nodes, "_runtime_paths", lambda: (Path(sys.executable), Path("plugin"), Path("snippet")))
+    image = torch.zeros(2, 4, 4, 3)
+
+    def run():
+        if stage == "sr":
+            return nodes.DLSSSuperResolution().upscale(image, image, image, "2x")
+        return nodes.DLSS5NeuralRendering().render(image, "0 - neutral", 1, 1, 1, -1, True, False, depth=image, motion_vectors=image)
+
+    started = time.monotonic()
+    if ending == "success":
+        output, _ = run()
+        torch.testing.assert_close(output, image)
+        assert any(bar.total == 2 and bar.values[-1:] == [2] for bar in bars)
+    else:
+        error = {"cancel": ComfyCancelled, "timeout": subprocess.TimeoutExpired, "failure": RuntimeError}[ending]
+        with pytest.raises(error) as caught:
+            run()
+        if ending == "failure":
+            assert "USEFUL_ERROR_TAIL" in str(caught.value)
+            assert len(str(caught.value)) < 20000
+        if ending == "timeout":
+            assert caught.value.timeout == 0.4
+            assert isinstance(caught.value.stderr, bytes)
+            assert "USEFUL_ERROR_TAIL" in str(caught.value.stderr)
+    assert time.monotonic() - started < 10
+    assert children and all(child.poll() is not None for child in children)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_progress_cancel_without_comfy_and_kill_escalation(monkeypatch, tmp_path):
+    monkeypatch.setitem(sys.modules, "comfy", None)
+    monkeypatch.setitem(sys.modules, "comfy.utils", None)
+    monkeypatch.setitem(sys.modules, "comfy.model_management", None)
+    assert hasattr(nodes, "_run_process"), "native calls need a shared cancellable lifecycle"
+    monkeypatch.setattr(nodes, "_runtime_temp_dir", lambda: tmp_path)
+    result = nodes._run_process([sys.executable, "-c", "print('standalone')"])
+    assert result.returncode == 0 and result.stdout.strip() == "standalone"
+    popen, children = subprocess.Popen, []
+
+    def launch(command, **kwargs):
+        child = popen(command, **kwargs)
+        child.terminate = lambda: None
+        children.append(child)
+        return child
+
+    monkeypatch.setattr(nodes.subprocess, "Popen", launch)
+    with pytest.raises(subprocess.TimeoutExpired):
+        nodes._run_process([sys.executable, "-c", "import time; time.sleep(30)"], timeout=0.2)
+    assert children[0].poll() is not None
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("kind", ["depth", "raft", "optical", "stabilize"])
+def test_progress_cancel_guide_loops(monkeypatch, comfy_progress, kind):
+    bars, state = comfy_progress
+    image = torch.zeros(5, 8, 8, 3)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    if kind == "depth":
+        monkeypatch.setitem(sys.modules, "transformers", types.SimpleNamespace(AutoImageProcessor=None, AutoModelForDepthEstimation=None))
+        processor = lambda images, **kwargs: {"pixels": torch.zeros(len(images), 8, 8)}
+        network = lambda pixels: types.SimpleNamespace(predicted_depth=pixels)
+        monkeypatch.setitem(nodes._DEPTH_CACHE, (nodes.DLSS5DepthAnythingV2.MODELS["Small (recommended)"], "cpu"), (processor, network))
+        run = lambda: nodes.DLSS5DepthAnythingV2().estimate(image, "Small (recommended)", True, 2)
+    elif kind == "raft":
+        monkeypatch.setitem(sys.modules, "torchvision.models.optical_flow", types.SimpleNamespace(raft_large=None, raft_small=None, Raft_Large_Weights=None, Raft_Small_Weights=None))
+        network = lambda a, b: [torch.zeros(len(a), 2, *a.shape[2:])]
+        monkeypatch.setitem(nodes._RAFT_CACHE, ("RAFT Small (fast)", "cpu"), (network, lambda a, b: (a, b)))
+        run = lambda: nodes.DLSS5RAFTFlow().estimate(image, "RAFT Small (fast)", 2)
+    elif kind == "optical":
+        run = lambda: nodes.DLSS5OpticalFlow().estimate(image, 0.5, 5, 21)
+    else:
+        run = lambda: nodes.DLSS5TemporalDepthStabilize().stabilize(image, image + 0.5, 0.7, 0.08)
+    assert run()[0].shape == image.shape
+    assert bars and bars[-1].values[-1] == bars[-1].total
+    assert len(bars[-1].values) >= 3
+
+    def cancel_after_progress(bar, value, total=None):
+        bar.values.append(value)
+        state.cancel = value > 0
+
+    monkeypatch.setattr(type(bars[-1]), "update_absolute", cancel_after_progress)
+    with pytest.raises(ComfyCancelled):
+        run()
+    assert bars[-1].values[-1] < bars[-1].total
+
+
+def test_progress_cancel_pipeline_progress_is_monotonic(easy_native_fakes, comfy_progress):
+    bars, _ = comfy_progress
+    image = torch.zeros(40, 2, 3, 3)
+    nodes.DLSS5FullPipeline().run(image, image + 1000, image + 2000, "2x", "Quality",
+                                "Bounded overlap-add", 2, 32, "2", 1, 1, 1, -1, True, True)
+    assert bars and bars[-1].values == sorted(bars[-1].values)
+    assert bars[-1].values[-1] == bars[-1].total
+
+
+def test_progress_cancel_guide_serialization_closes_memmaps(monkeypatch, tmp_path, comfy_progress):
+    bars, state = comfy_progress
+    original = nodes.F.interpolate
+
+    def cancel_after_resize(*args, **kwargs):
+        state.cancel = True
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(nodes.F, "interpolate", cancel_after_resize)
+    image = torch.zeros(10, 4, 4, 3)
+    with pytest.raises(ComfyCancelled):
+        nodes._save_guides_chunked(image, image, (8, 8), tmp_path / "depth.npy", tmp_path / "motion.npy")
+    for path in tmp_path.iterdir():
+        path.unlink()
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("kind", ["vda", "flash"])
+def test_progress_cancel_optional_depth_stage(monkeypatch, comfy_progress, kind):
+    bars, state = comfy_progress
+    image = torch.zeros(2, 4, 4, 3)
+    monkeypatch.setattr(nodes, "__package__", "dlss_test")
+    monkeypatch.setattr(nodes, "__spec__", importlib.util.spec_from_loader("dlss_test.nodes", loader=None))
+    backend = types.SimpleNamespace(infer_vda_small=lambda *a, **k: image, infer_flashdepth_external=lambda *a: image)
+    monkeypatch.setitem(sys.modules, "dlss_test.video_depth_backend", backend)
+    run = (lambda: nodes.DLSS5VideoDepthAnything().estimate(image, "280 (compatible)", "FP32")) if kind == "vda" else (
+        lambda: nodes.DLSS5FlashDepth().estimate(image, "FlashDepth-L (low resolution)", "python", "repo", 24))
+    torch.testing.assert_close(run()[0], image)
+    assert bars and bars[-1].values == [0, 1]
+    state.cancel = True
+    with pytest.raises(ComfyCancelled):
+        run()
+
+
+@pytest.mark.parametrize("stage,count", [("sr", 2), ("nr", 2), ("nr", 1)])
+def test_progress_cancel_bridge_emits_real_frame_protocol(monkeypatch, tmp_path, capsys, stage, count):
+    import numpy as np
+
+    class Clip:
+        def get_frame(self, index):
+            size = 8 if stage == "sr" else 4
+            return [np.full((size, size), index / 10, dtype=np.float32)] * 3
+
+    std = types.SimpleNamespace(BlankClip=lambda **kwargs: None, ModifyFrame=lambda *args: None)
+    core = types.SimpleNamespace(std=std, dlsssr=types.SimpleNamespace(Upscale=lambda *a, **k: Clip()),
+                                 dlssnr=types.SimpleNamespace(Enhance=lambda *a, **k: Clip()))
+    monkeypatch.setitem(sys.modules, "vapoursynth", types.SimpleNamespace(core=core, RGBS=0, GRAYS=1))
+    runner = _load_module("runner_test", ROOT / ("sr_bridge_runner.py" if stage == "sr" else "bridge_runner.py"))
+    source, output = tmp_path / "in.npy", tmp_path / "out.npy"
+    depth, motion = tmp_path / "depth.npy", tmp_path / "motion.npy"
+    np.save(source, np.zeros((count, 4, 4, 3), dtype=np.float32))
+    np.save(depth, np.zeros((count, 4, 4), dtype=np.float32))
+    np.save(motion, np.zeros((count, 4, 4, 2), dtype=np.float32))
+    args = ["runner", str(source), str(output), "--plugin", "unused", "--depth", str(depth), "--mvec", str(motion)]
+    if stage == "sr":
+        args += ["--scale", "2", "--quality", "2"]
+    else:
+        settings = dict(style=0, style_strength=1, intensity=1, local_structure=1, skin_structure=-1, auto_mask=True)
+        args += ["--snippet", "unused", "--settings", json.dumps(settings)]
+    monkeypatch.setattr(sys, "argv", args)
+    runner.main()
+    native_count = max(2, count) if stage == "nr" else count
+    assert capsys.readouterr().out.splitlines() == [f"DLSS_PROGRESS {i+1} {native_count}" for i in range(native_count)]
+    result = np.load(output)
+    assert result.shape == (count, 8 if stage == "sr" else 4, 8 if stage == "sr" else 4, 3)
+    assert np.allclose(result[-1], (native_count - 1) / 10)
+
+
+@pytest.mark.parametrize("operation", ["Upscale only", "Neural rendering only", "Upscale + neural rendering"])
+def test_progress_cancel_pipeline_between_windows(easy_native_fakes, monkeypatch, comfy_progress, operation):
+    bars, state = comfy_progress
+    stage = "sr" if operation == "Upscale only" else "nr"
+    cls, method = (nodes.DLSSSuperResolution, "upscale") if stage == "sr" else (nodes.DLSS5NeuralRendering, "render")
+    original = getattr(cls, method)
+
+    def stop_after_first(*args, **kwargs):
+        result = original(*args, **kwargs)
+        state.cancel = True
+        return result
+
+    monkeypatch.setattr(cls, method, stop_after_first)
+    image = torch.zeros(25, 2, 3, 3)
+    with pytest.raises(ComfyCancelled):
+        nodes.DLSS5EasyPipeline().run(image, "Fast preview", operation, "2x", "Quality", "Neutral / faithful", 0.85)
+    assert len(easy_native_fakes[stage]) == 1
+    assert bars
+
+
+@pytest.mark.parametrize("operation,factor", [("Upscale only", 3), ("Neural rendering only", 1), ("Upscale + neural rendering", 3)])
+def test_memory_advice_before_guides_preserves_presets(easy_native_fakes, monkeypatch, tmp_path, capsys, operation, factor):
+    monkeypatch.setattr(nodes, "_runtime_temp_dir", lambda: tmp_path)
+    monkeypatch.setattr(shutil, "disk_usage", lambda path: types.SimpleNamespace(free=1))
+    original = nodes.DLSS5DepthAnythingV2.estimate
+    early = []
+
+    def depth(*args):
+        early.append(capsys.readouterr().out)
+        return original(*args)
+
+    monkeypatch.setattr(nodes.DLSS5DepthAnythingV2, "estimate", depth)
+    image = torch.zeros(25, 2, 3, 3)
+    output, report = nodes.DLSS5EasyPipeline().run(image, "Fast preview", operation, "3x", "Balanced", "Realistic detail", 0.6)
+    advice = early[0]
+    assert "25 frames" in advice and "input=3x2" in advice and f"output={3*factor}x{2*factor}" in advice
+    assert "float32" in advice and "array" in advice and "temp" in advice
+    assert "WARNING" in advice and "disk" in advice and "VRAM" in advice and "excludes" in advice
+    assert advice.strip() in report
+    assert "Easy preset: Fast preview" in report
+    if operation != "Neural rendering only":
+        assert all(call[3:5] == ("3x", "Balanced") for call in easy_native_fakes["sr"])
+    assert output.shape == (25, 2*factor, 3*factor, 3)
+
+
+def test_memory_advice_estimates_scale_with_shape_operation_and_window(monkeypatch, tmp_path):
+    assert hasattr(nodes, "_easy_memory_advice"), "Easy needs a pre-inference storage estimate"
+    monkeypatch.setattr(nodes, "_runtime_temp_dir", lambda: tmp_path)
+    monkeypatch.setattr(shutil, "disk_usage", lambda path: types.SimpleNamespace(free=10**15))
+    import re
+
+    def estimate(count=25, height=8, width=12, scale="2x", operation="Upscale only", scenario="Fast preview"):
+        report = nodes._easy_memory_advice((count, height, width, 3), operation, scale, nodes._easy_preset(scenario, count))
+        assert "WARNING" not in report and "excludes" in report and "VRAM" in report
+        return tuple(int(re.search(label + r"=(\d+) bytes", report)[1]) for label in ("arrays", "temp"))
+
+    base = estimate()
+    assert estimate(height=16, width=24) == tuple(4 * value for value in base)
+    longer = estimate(count=50)
+    assert longer[0] == 2 * base[0] and longer[1] == base[1]
+    assert all(a > b for a, b in zip(estimate(scale="4x"), base))
+    assert all(a > b for a, b in zip(estimate(operation="Upscale + neural rendering"), base))
+    assert estimate(operation="Neural rendering only", scale="4x") == estimate(operation="Neural rendering only", scale="2x")
+    assert estimate(scenario="Short video / best quality")[1] > base[1]
+
+
+def test_memory_advice_unavailable_disk_is_advisory(monkeypatch, tmp_path):
+    def unavailable(path):
+        raise OSError("disk probe unavailable")
+
+    monkeypatch.setattr(nodes, "_runtime_temp_dir", lambda: tmp_path)
+    monkeypatch.setattr(shutil, "disk_usage", unavailable)
+    report = nodes._easy_memory_advice((1, 8, 8, 3), "Neural rendering only", "4x", nodes._easy_preset("Still image"))
+    assert "disk unknown" in report and "output=8x8" in report
+    # NR's established still-image path writes two native output frames.
+    assert "temp=3072 bytes" in report
 
 
 @pytest.fixture
