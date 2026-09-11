@@ -1,6 +1,6 @@
 canonVersion: 1.14.0
 agents:
-- codex
+  - codex
 loop:
   parallel: 1
   isolate: true
@@ -17,31 +17,31 @@ codeIntelligence:
   mode: active
   policy:
     excludePatterns:
-    - runtime/**
-    - docs/images/**
-    - .agents/**
-    - .yoke/**
-    - graphify-out/**
+      - runtime/**
+      - docs/images/**
+      - .agents/**
+      - .yoke/**
+      - graphify-out/**
     maxFileBytes: 2000000
   graft:
     command: node
     args:
-    - G:\NN-Developed\ComfxyUI-DLSS5\ComfyUI-DLSS5\.yoke\tooling\graft\node_modules\@nanonets\graft\dist\cli.js
-    - mcp
+      - G:\NN-Developed\ComfxyUI-DLSS5\ComfyUI-DLSS5\.yoke\tooling\graft\node_modules\@nanonets\graft\dist\cli.js
+      - mcp
   serena:
     command: C:/Users/HEC_e/.local/bin/uvx.exe
     args:
-    - --from
-    - git+https://github.com/oraios/serena@701e7c843f46c6a649203a488cece1bf19f1df90
-    - serena
-    - start-mcp-server
-    - --project-from-cwd
-    - --context
-    - codex
-    - --enable-web-dashboard
-    - 'false'
-    - --open-web-dashboard
-    - 'false'
+      - --from
+      - git+https://github.com/oraios/serena@701e7c843f46c6a649203a488cece1bf19f1df90
+      - serena
+      - start-mcp-server
+      - --project-from-cwd
+      - --context
+      - codex
+      - --enable-web-dashboard
+      - "false"
+      - --open-web-dashboard
+      - "false"
 runner:
   agent: codex
 routing:
@@ -51,61 +51,58 @@ routing:
   assessmentPolicy: prepared
   fallback: block
   workers:
-  - id: codex-light
-    agent: codex
-    model: gpt-5.6-luna
-    reasoningEffort: low
-    tier: light
-    costTier: low
-    capabilities:
-    - mechanical
-    - tests
-  - id: codex-standard
-    agent: codex
-    model: gpt-5.6-terra
-    reasoningEffort: medium
-    tier: standard
-    costTier: low
-    capabilities:
-    - implementation
-  - id: codex-strong
-    agent: codex
-    model: gpt-5.6-sol
-    reasoningEffort: high
-    tier: strong
-    costTier: medium
-    capabilities:
-    - debugging
-  - id: codex-frontier
-    agent: codex
-    model: gpt-6-astra
-    reasoningEffort: high
-    tier: frontier
-    costTier: high
-    capabilities:
-    - architecture
+    - id: codex-light
+      agent: codex
+      model: gpt-5.6-luna
+      reasoningEffort: low
+      tier: light
+      costTier: low
+      capabilities:
+        - mechanical
+        - tests
+    - id: codex-standard
+      agent: codex
+      model: gpt-5.6-terra
+      reasoningEffort: medium
+      tier: standard
+      costTier: low
+      capabilities:
+        - implementation
+    - id: codex-strong
+      agent: codex
+      model: gpt-5.6-sol
+      reasoningEffort: high
+      tier: strong
+      costTier: medium
+      capabilities:
+        - debugging
+    - id: codex-frontier
+      agent: codex
+      model: gpt-6-astra
+      reasoningEffort: high
+      tier: frontier
+      costTier: high
+      capabilities:
+        - architecture
   rules:
-  - storyId: DLSS-1
-    worker: codex-strong
-    escalateTo: codex-frontier
-  - storyId: DLSS-2
-    worker: codex-strong
-    escalateTo: codex-frontier
-  - storyId: DLSS-3
-    worker: codex-standard
-    escalateTo: codex-frontier
-  - storyId: DLSS-4
-    worker: codex-strong
-    escalateTo: codex-frontier
-  - storyId: DLSS-5
-    worker: codex-strong
-    escalateTo: codex-frontier
-  - storyId: DLSS-6
-    worker: codex-strong
-    escalateTo: codex-frontier
-  - storyId: DLSS-7
-    worker: codex-standard
-    escalateTo: codex-frontier
+    - storyId: DLSS-1
+      worker: codex-strong
+      escalateTo: codex-frontier
+    - storyId: DLSS-2
+      worker: codex-strong
+      escalateTo: codex-frontier
+    - storyId: DLSS-3
+      worker: codex-standard
+      escalateTo: codex-frontier
+    - storyId: DLSS-4
+      worker: codex-frontier
+    - storyId: DLSS-5
+      worker: codex-frontier
+    - storyId: DLSS-6
+      worker: codex-frontier
+    - storyId: DLSS-7
+      worker: codex-standard
+      escalateTo: codex-frontier
 completion:
   command: rtk proxy python -B -m pytest -q -p no:cacheprovider tests
   retries: 0

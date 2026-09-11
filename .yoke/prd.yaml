@@ -175,7 +175,13 @@
       support report preferred, detailed paths local. Tests mock probes and
       model call order. Include NumPy in bridge dependency diagnostics and Easy
       preflight: it is required by the runner and was absent in this actual
-      configured VapourKit installation."
+      configured VapourKit installation. Manual setup guidance must distinguish
+      installing an automatically configured runtime from repairing the
+      externally selected VapourKit Python: install_runtime.ps1 does not add
+      NumPy to an arbitrary -VapourKitPath. Make the manual failure message
+      direct users to the selected interpreter or to the automatic setup as an
+      alternative, without promising that rerunning manual setup against an
+      unchanged external environment will fix it."
   assessmentFor: faf18653bacbccc7b8666f5742bb7951b2f16b64b36ce7c8d028764336be9e0c
 - id: DLSS-5
   title: Honor bounded mode for all Easy operations

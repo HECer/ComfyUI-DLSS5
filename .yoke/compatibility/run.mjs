@@ -20,7 +20,7 @@ const reviewer=context=>{
  const dir=join(root,'.yoke','artifacts','independent-review');mkdirSync(dir,{recursive:true});
  writeFileSync(join(dir,context.story.id+'-tests.json'),JSON.stringify(evidence,null,2));
  const capture=inv=>{
-  const input=inv.input+'\n\nSupervisor execution evidence for this exact source fingerprint (tests ran outside your read-only sandbox immediately before review):\n'+JSON.stringify(evidence)+'\nReview the actual diff and test quality independently. Your sandbox cannot create pytest temporary directories; use this real test evidence, do not rerun write-requiring tests. Do not spawn other agents. Emit the exact verdict schema. Each finding MUST be an object with severity (blocking/warning/info), message, optional file/line/evidence; never a string. Your CLI was invoked explicitly with model '+model+'; use that model identifier in provenance, which the supervisor will independently verify from the provider session record. Do not assume a generic gpt-5 identity.\n';
+  const input=inv.input+'\nComplete the review of all changed production paths and all acceptance criteria before returning a verdict. Report all independently supported material blockers together, with evidence, so the repair round can address the full finding set. Keep the scope on this story and its regressions.\n'+'\n\nSupervisor execution evidence for this exact source fingerprint (tests ran outside your read-only sandbox immediately before review):\n'+JSON.stringify(evidence)+'\nReview the actual diff and test quality independently. Your sandbox cannot create pytest temporary directories; use this real test evidence, do not rerun write-requiring tests. Do not spawn other agents. Emit the exact verdict schema. Each finding MUST be an object with severity (blocking/warning/info), message, optional file/line/evidence; never a string. Your CLI was invoked explicitly with model '+model+'; use that model identifier in provenance, which the supervisor will independently verify from the provider session record. Do not assume a generic gpt-5 identity.\n';
   const result=runCapturedAgent('codex',{...inv,input,args:[...inv.args,'--output-schema',join(root,'.yoke','compatibility','review-schema.json')]});
   const events=result.output.split(/\r?\n/).flatMap(l=>{try{return [JSON.parse(l)]}catch{return []}});
   const thread=events.find(e=>e.type==='thread.started')?.thread_id;
@@ -36,6 +36,6 @@ const reviewer=context=>{
   writeFileSync(join(dir,context.story.id+'-review.json'),JSON.stringify({thread,provider:'codex',recordedModel:models[0],output:result.output},null,2));
   return result;
  };
- return makeReviewRunner('codex',15*60*1000,capture,{model,reasoningEffort:'high',nativeMultiAgent:false})(context);
+ return makeReviewRunner('codex',15*60*1000,capture,{model,reasoningEffort:model==='gpt-6-astra'?'high':'medium',nativeMultiAgent:false})(context);
 };
 process.exitCode=await runLoopCommand(root,{agent:'codex',isolate:true,parallel:1,routing:true,review:true,reviewer:'codex',reviewRunner:reviewer,maxIterations:process.argv.includes('--first')?1:7,resumeWorktree:process.argv.includes('--resume'),timeoutMinutes:25,json:true,decisionPolicy:'critical'});
