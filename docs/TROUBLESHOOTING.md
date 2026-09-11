@@ -24,7 +24,7 @@ Depth Anything V2 and RAFT may download weights. Check network access, model cac
 
 ## Out of memory in persistent mode
 
-`Persistent full sequence` preserves one native context, but ComfyUI still holds the full IMAGE batch. Try a shorter clip, lower resolution, `Bounded overlap-add`, a larger page file, and a temporary drive with more free space.
+`Persistent full sequence` preserves one native context per selected stage. Try a shorter clip, lower resolution, `Bounded overlap-add`, a larger page file, and a temporary drive with more free space. Bounded mode limits each native window to `chunk_size + history_overlap` frames; the complete ComfyUI IMAGE input and output still reside in memory. Easy's Long video and Fast preview presets apply bounded windows to all operations, with maximum windows of 24 and 10 frames respectively.
 
 ## Periodic brightness or detail changes
 

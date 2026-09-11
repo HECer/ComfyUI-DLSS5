@@ -203,7 +203,7 @@
       verify:
         - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
           truthful_presets
-  passes: false
+  passes: true
   needs:
     - DLSS-4
   area: dlss-usability

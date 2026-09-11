@@ -14,3 +14,6 @@ route=codex-standard (explicit project routing rule); codex implemented DLSS-3
 
 ## 2026-09-11 — DLSS-4: Truthful runtime diagnostics and early preflight
 route=codex-frontier (explicit project routing rule); codex implemented DLSS-4
+
+## 2026-09-11 — DLSS-5: Honor bounded mode for all Easy operations
+route=codex-frontier (explicit project routing rule); codex implemented DLSS-5

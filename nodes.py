@@ -102,7 +102,7 @@ def _easy_preset(scenario: str, frame_count: int | None = None):
             overlap=2,
         ),
     }
-    return presets[scenario]
+    return dict(scenario=scenario, **presets[scenario])
 
 
 def _overlap_add(previous: torch.Tensor, current: torch.Tensor, overlap: int):
@@ -722,10 +722,10 @@ class DLSS5FullPipeline:
                 "scale": (["2x", "3x", "4x"], {"tooltip": "Grows output width and height by this factor; 2x means four times the pixels."}),
                 "sr_quality": (list(DLSSSuperResolution.QUALITY), {"tooltip": "DLSS Super Resolution quality preset."}),
                 "processing_mode": (
-                    ["Persistent full sequence", "Bounded overlap-add"], {"tooltip": "Persistent processes the whole sequence; bounded overlap-add limits memory while retaining overlap context."},
+                    ["Persistent full sequence", "Bounded overlap-add"], {"tooltip": "Persistent processes the whole sequence; bounded limits each native window to chunk_size + history_overlap frames. The complete ComfyUI IMAGE input and output remain in memory."},
                 ),
-                "chunk_size": ("INT", {"default": 8, "min": 2, "max": 64, "tooltip": "Frames per bounded processing window; ignored by Persistent full sequence."}),
-                "history_overlap": ("INT", {"default": 8, "min": 0, "max": 32, "tooltip": "Prior frames repeated for bounded windows; ignored by Persistent full sequence."}),
+                "chunk_size": ("INT", {"default": 8, "min": 2, "max": 64, "tooltip": "Base frame count / stride between bounded window starts; each native window includes up to chunk_size + history_overlap frames. Ignored by Persistent full sequence."}),
+                "history_overlap": ("INT", {"default": 8, "min": 0, "max": 32, "tooltip": "Extra frames appended to each bounded window and blended with the next window; ignored by Persistent full sequence."}),
                 "style": (["0 - neutral", "1", "2"], {"tooltip": "Neural Rendering style selection; 0 is neutral."}),
                 "style_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "tooltip": "Amount of the selected Neural Rendering style."}),
                 "intensity": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "tooltip": "Overall Neural Rendering effect intensity."}),
@@ -791,7 +791,7 @@ class DLSS5FullPipeline:
 
 class DLSS5EasyPipeline:
     """Opinionated one-node path; advanced nodes remain available for authored guides."""
-    DESCRIPTION = "Experimental one-node DLSS path. Scenario selects bounded processing, currently limited to Upscale + neural rendering; quality is ignored for Neural rendering only, and scale is ignored when no upscaling operation is selected."
+    DESCRIPTION = "Experimental one-node DLSS path. Scenario selects persistent or bounded native processing for all operations; the complete ComfyUI IMAGE input and output remain in memory. Quality and scale are ignored for Neural rendering only."
 
     SCENARIOS = [
         "Auto (recommended)",
@@ -811,7 +811,7 @@ class DLSS5EasyPipeline:
         return {
             "required": {
                 "image": ("IMAGE", {"tooltip": "Input image or frame sequence; Auto selects a preset from its frame count."}),
-                "scenario": (cls.SCENARIOS, {"tooltip": "Chooses the Easy processing preset and whether a sequence is bounded for memory."}),
+                "scenario": (cls.SCENARIOS, {"tooltip": "Long video uses up to 24 frames per native window (16 + 8 overlap); Fast preview uses up to 10 (8 + 2 overlap), for all operations. The complete ComfyUI IMAGE input and output remain in memory."}),
                 "operation": (
                     [
                         "Upscale + neural rendering",
@@ -858,24 +858,7 @@ class DLSS5EasyPipeline:
         if image.shape[0] > 1:
             depth = DLSS5TemporalDepthStabilize().stabilize(depth, motion, 0.7, 0.08)[0]
         style, base_strength, local_structure, skin_structure = self.LOOKS[look]
-        if operation == "Upscale only":
-            output, report = DLSSSuperResolution().upscale(
-                image, depth, motion, scale, quality
-            )
-        elif operation == "Neural rendering only":
-            output, report = DLSS5NeuralRendering().render(
-                image,
-                style,
-                base_strength * effect_strength,
-                effect_strength,
-                local_structure,
-                skin_structure,
-                True,
-                True,
-                depth=depth,
-                motion_vectors=motion,
-            )
-        else:
+        if operation == "Upscale + neural rendering":
             output, report = DLSS5FullPipeline().run(
                 image,
                 depth,
@@ -893,10 +876,59 @@ class DLSS5EasyPipeline:
                 True,
                 True,
             )
+        else:
+            output = None
+            reports = []
+            for start, stop in _pipeline_windows(
+                image.shape[0], preset["chunk_size"], preset["overlap"],
+                preset["processing_mode"],
+            ):
+                frames, frame_depth, frame_motion = image, depth, motion
+                if preset["processing_mode"] == "Bounded overlap-add":
+                    frames = image[start:stop]
+                    frame_depth = depth[start:stop]
+                    frame_motion = motion[start:stop]
+                if operation == "Upscale only":
+                    out, report = DLSSSuperResolution().upscale(
+                        frames, frame_depth, frame_motion, scale, quality
+                    )
+                else:
+                    out, report = DLSS5NeuralRendering().render(
+                        frames,
+                        style,
+                        base_strength * effect_strength,
+                        effect_strength,
+                        local_structure,
+                        skin_structure,
+                        True,
+                        True,
+                        depth=frame_depth,
+                        motion_vectors=frame_motion,
+                    )
+                output = out if output is None else _overlap_add(output, out, preset["overlap"])
+                reports.append(f"frames {start}-{stop - 1}: {report}")
+            report = "\n".join(reports)
         summary = (
-            f"Easy preset: {scenario}; guide={preset['flow_model']}; "
-            f"operation={operation}; mode={preset['processing_mode']}; look={look}\n"
+            f"Easy preset: {preset['scenario']}; requested={scenario}; "
+            f"guide={preset['flow_model']}; depth=Depth Anything V2 Small; "
+            f"operation={operation}; mode={preset['processing_mode']}; "
+            f"input={image.shape[0]} frames {image.shape[2]}x{image.shape[1]}; "
+            f"output={output.shape[0]} frames {output.shape[2]}x{output.shape[1]}\n"
         )
+        if operation != "Neural rendering only":
+            summary += f"scale={scale}; quality={quality}\n"
+        if operation != "Upscale only":
+            summary += (
+                f"look={look}; style={style}; style_strength={base_strength * effect_strength:g}; "
+                f"intensity={effect_strength:g}; local_structure={local_structure:g}; "
+                f"skin_structure={skin_structure:g}; auto_mask=True; depth_inverted=True\n"
+            )
+        if preset["processing_mode"] == "Bounded overlap-add":
+            summary += (
+                f"chunk_size={preset['chunk_size']}; overlap={preset['overlap']}; "
+                f"max_window={preset['chunk_size'] + preset['overlap']} frames; "
+                "complete ComfyUI IMAGE input and output remain in memory\n"
+            )
         return output, summary + report
 
 

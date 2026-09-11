@@ -12,6 +12,7 @@ import sys
 import types
 
 import pytest
+import torch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,6 +27,145 @@ def _load_module(name: str, path: Path):
 
 nodes = _load_module("usability_nodes", ROOT / "nodes.py")
 install_runtime = _load_module("usability_install_runtime", ROOT / "install_runtime.py")
+
+
+@pytest.fixture
+def easy_native_fakes(monkeypatch):
+    calls = {name: [] for name in ("depth", "flow", "stabilize", "sr", "nr")}
+    monkeypatch.setattr(nodes, "_bridge_diagnostics", lambda _stages: (True, "ready"))
+
+    def depth(_self, image, *args):
+        calls["depth"].append(args)
+        return (image + 1000,)
+
+    def flow(_self, image, *args):
+        calls["flow"].append(args)
+        return (image + 2000,)
+
+    def stabilize(_self, depth, motion, *args):
+        calls["stabilize"].append(args)
+        torch.testing.assert_close(motion - depth, torch.full_like(depth, 1000))
+        return (depth,)
+
+    def upscale(_self, image, depth, motion, scale, quality):
+        torch.testing.assert_close(depth, image + 1000)
+        torch.testing.assert_close(motion, image + 2000)
+        factor = int(scale[0])
+        output = image.repeat_interleave(factor, 1).repeat_interleave(factor, 2)
+        calls["sr"].append((image, depth, motion, scale, quality, output))
+        return output, "fake SR"
+
+    def render(_self, image, *args, depth, motion_vectors):
+        torch.testing.assert_close(depth[:, 0, 0, 0], image[:, 0, 0, 0] + 1000)
+        torch.testing.assert_close(motion_vectors[:, 0, 0, 0], image[:, 0, 0, 0] + 2000)
+        calls["nr"].append((image, depth, motion_vectors, args))
+        return image, "fake NR"
+
+    monkeypatch.setattr(nodes.DLSS5DepthAnythingV2, "estimate", depth)
+    monkeypatch.setattr(nodes.DLSS5OpticalFlow, "estimate", flow)
+    monkeypatch.setattr(nodes.DLSS5RAFTFlow, "estimate", flow)
+    monkeypatch.setattr(nodes.DLSS5TemporalDepthStabilize, "stabilize", stabilize)
+    monkeypatch.setattr(nodes.DLSSSuperResolution, "upscale", upscale)
+    monkeypatch.setattr(nodes.DLSS5NeuralRendering, "render", render)
+    return calls
+
+
+@pytest.mark.parametrize("count", [1, 2, 17, 33, 96, 97, 100])
+@pytest.mark.parametrize("scale", ["2x", "3x", "4x"])
+@pytest.mark.parametrize("operation", ["Upscale only", "Neural rendering only", "Upscale + neural rendering"])
+@pytest.mark.parametrize("scenario,stride,overlap", [
+    ("Long video / memory efficient", 16, 8), ("Fast preview", 8, 2),
+])
+def test_bounded_operations_preserve_every_frame(easy_native_fakes, count, scale, operation, scenario, stride, overlap):
+    image = torch.arange(count, dtype=torch.float32).view(count, 1, 1, 1).expand(-1, 2, 3, 3)
+    output, report = nodes.DLSS5EasyPipeline().run(
+        image, scenario, operation, scale, "Balanced", "Realistic detail", 0.6
+    )
+    factor = 1 if operation == "Neural rendering only" else int(scale[0])
+    expected = image.repeat_interleave(factor, 1).repeat_interleave(factor, 2)
+    torch.testing.assert_close(output, expected)
+    expected_windows = [list(range(start, min(count, start + stride + overlap))) for start in range(0, count, stride)]
+    for stage in ("sr", "nr"):
+        active = stage == "sr" and operation != "Neural rendering only" or stage == "nr" and operation != "Upscale only"
+        assert [call[0][:, 0, 0, 0].tolist() for call in easy_native_fakes[stage]] == (expected_windows if active else [])
+    assert "mode=Bounded overlap-add" in report
+    assert f"Easy preset: {scenario}; requested={scenario}" in report
+    assert f"chunk_size={stride}; overlap={overlap}; max_window={stride + overlap} frames" in report
+    persistent, _ = nodes.DLSS5EasyPipeline().run(
+        image, "Short video / best quality", operation, scale, "Balanced", "Realistic detail", 0.6
+    )
+    torch.testing.assert_close(output, persistent)
+
+
+@pytest.mark.parametrize("overlap", [0, 8, 32])
+def test_bounded_operations_full_pipeline_overlap_larger_than_stride(easy_native_fakes, overlap):
+    image = torch.arange(17, dtype=torch.float32).view(17, 1, 1, 1)
+    output, _ = nodes.DLSS5FullPipeline().run(
+        image, image + 1000, image + 2000, "2x", "Quality",
+        "Bounded overlap-add", 2, overlap, "2", 0.51, 0.6, 1.2, 0.1, True, True,
+    )
+    torch.testing.assert_close(output, image.expand(-1, 2, 2, -1))
+
+
+@pytest.mark.parametrize("count,resolved,mode,flow", [
+    (1, "Still image", "Persistent full sequence", "Optical Flow (fastest)"),
+    (2, "Short video / best quality", "Persistent full sequence", "RAFT Large (best)"),
+    (96, "Short video / best quality", "Persistent full sequence", "RAFT Large (best)"),
+    (97, "Long video / memory efficient", "Bounded overlap-add", "RAFT Small (fast)"),
+])
+@pytest.mark.parametrize("operation", ["Upscale only", "Neural rendering only", "Upscale + neural rendering"])
+def test_truthful_presets_reports_resolved_auto_and_active_settings(easy_native_fakes, count, resolved, mode, flow, operation):
+    image = torch.arange(count, dtype=torch.float32).view(count, 1, 1, 1).expand(-1, 2, 3, 3)
+    output, report = nodes.DLSS5EasyPipeline().run(
+        image, "Auto (recommended)", operation, "3x", "Balanced", "Realistic detail", 0.6
+    )
+    assert f"Easy preset: {resolved}" in report
+    assert "requested=Auto (recommended)" in report
+    assert f"mode={mode}" in report
+    assert f"guide={flow}" in report
+    assert "depth=Depth Anything V2 Small" in report
+    assert f"input={count} frames 3x2" in report
+    assert f"output={count} frames {output.shape[2]}x{output.shape[1]}" in report
+    assert ("scale=3x; quality=Balanced" in report) == (operation != "Neural rendering only")
+    for setting in ("look=Realistic detail", "style=2", "style_strength=0.51", "intensity=0.6", "local_structure=1.2", "skin_structure=0.1", "auto_mask=True", "depth_inverted=True"):
+        assert (setting in report) == (operation != "Upscale only")
+    assert easy_native_fakes["depth"] == [("Small (recommended)", True, 4)]
+    assert easy_native_fakes["flow"] == ([(0.5, 5, 21)] if count == 1 else [(flow, 2 if count <= 96 else 4)])
+    assert easy_native_fakes["stabilize"] == ([] if count == 1 else [(0.7, 0.08)])
+    if count > 96:
+        assert "chunk_size=16; overlap=8; max_window=24 frames" in report
+        assert "complete ComfyUI IMAGE input and output remain in memory" in report
+    else:
+        assert "chunk_size=" not in report
+
+
+@pytest.mark.parametrize("operation", ["Upscale only", "Neural rendering only"])
+@pytest.mark.parametrize("scenario", ["Still image", "Short video / best quality"])
+def test_truthful_presets_persistent_solo_retains_one_unchanged_call(easy_native_fakes, operation, scenario):
+    image = torch.arange(100, dtype=torch.float32).view(100, 1, 1, 1)
+    output, report = nodes.DLSS5EasyPipeline().run(
+        image, scenario, operation, "4x", "Performance", "Strong detail", 0.8
+    )
+    stage = "sr" if operation == "Upscale only" else "nr"
+    assert len(easy_native_fakes[stage]) == 1
+    call = easy_native_fakes[stage][0]
+    assert call[0] is image
+    if stage == "sr":
+        assert call[3:5] == ("4x", "Performance")
+        assert output is call[5]
+    else:
+        assert call[3] == ("2", 0.8, 0.8, 1.45, 0.3, True, True)
+        assert output is image
+    assert "mode=Persistent full sequence" in report
+
+
+def test_truthful_presets_preserve_baseline_defaults():
+    baseline = _baseline_nodes()
+    for scenario in nodes.DLSS5EasyPipeline.SCENARIOS[1:]:
+        preset = nodes._easy_preset(scenario)
+        assert {key: value for key, value in preset.items() if key != "scenario"} == baseline._easy_preset(scenario)
+    assert nodes.DLSS5EasyPipeline.LOOKS == baseline.DLSS5EasyPipeline.LOOKS
+    assert _schema_contract(nodes.DLSS5EasyPipeline) == _schema_contract(baseline.DLSS5EasyPipeline)
 
 
 def test_config_roundtrip_reads_utf8_with_or_without_bom(monkeypatch, tmp_path):
@@ -762,7 +902,8 @@ def test_node_help_easy_controls_explain_inactive_and_bounded_limits():
 
     assert "ignored for Upscale only" in schema["look"][1]["tooltip"]
     assert "ignored for Upscale only" in schema["effect_strength"][1]["tooltip"]
-    assert "currently limited to Upscale + neural rendering" in nodes.DLSS5EasyPipeline.DESCRIPTION
+    assert "all operations" in nodes.DLSS5EasyPipeline.DESCRIPTION
+    assert "complete" in schema["scenario"][1]["tooltip"]
 
 
 def test_node_help_flashdepth_requires_explicit_environment_paths():

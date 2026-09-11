@@ -29,7 +29,7 @@ VapourKit; a separate optional setup action downloads the open-source frame-gene
 - Offers FlashDepth as an isolated, optional high-resolution video-depth backend.
 - Stabilizes per-frame depth by reprojecting previous depth with backward motion.
 - Supports one persistent native context for short and medium sequences.
-- Provides bounded overlap-add processing as a lower-memory fallback.
+- Provides bounded native overlap-add processing as a lower-memory fallback; complete ComfyUI input and output batches remain in memory.
 - Uses memory-mapped files for large native bridge inputs and outputs.
 
 It does not turn an arbitrary photograph into a physically correct game-engine render. Game integrations have native geometry, material buffers, exposure data, jitter, accurate motion vectors, and engine-specific training assumptions. Here, depth and motion are estimated from pixels, so results can differ substantially.
@@ -44,7 +44,7 @@ Known limitations:
 - The optional Frame Generation path targets Windows 11 and a supported RTX 40- or 50-series GPU. Upstream recommends HAGS; the status node reports its registry state because behavior can vary by driver and worker build.
 - Runtime compatibility depends on the exact NVIDIA DLL, driver, GPU, and wrapper build.
 - `Persistent full sequence` removes native chunk resets but ComfyUI still owns the full IMAGE batch.
-- Long films should use `Bounded overlap-add` until a file-to-file streaming node is released.
+- `Bounded overlap-add` limits native windows, but long films still need to fit complete ComfyUI input and output batches in memory until a file-to-file streaming node is released.
 - HDR, alpha, variable-frame-rate video, subtitles, scene-cut resets, and multi-hour processing need broader testing.
 - Depth Anything and RAFT download model weights on first use.
 
@@ -173,12 +173,14 @@ Add **Experimental DLSS — Easy Upscale & Render**, connect an `IMAGE` batch, a
 
 - `Still image` uses lightweight zero/optical motion and one native context.
 - `Short video / best quality` uses RAFT Large and a persistent context.
-- `Long video / memory efficient` uses RAFT Small and bounded overlap-add.
-- `Fast preview` uses CPU optical flow and small bounded windows.
+- `Long video / memory efficient` uses RAFT Small and bounded overlap-add, with a 16-frame stride plus 8 overlap frames (up to 24 frames per native window).
+- `Fast preview` uses CPU optical flow and an 8-frame stride plus 2 overlap frames (up to 10 frames per native window).
 
 `Auto (recommended)` selects still mode for one frame, the quality-video preset for up to 96 frames, and the memory-efficient long-video preset above that threshold.
 
 Choose `Upscale only`, `Neural rendering only`, or `Upscale + neural rendering`. The node automatically estimates and temporally stabilizes depth and creates current-to-previous motion guides, then runs only the selected stages. `Neutral / faithful` is the safest evaluation look. The Easy node favors practical defaults; use the standalone or Advanced nodes when you have engine-authored depth/motion or need exact controls.
+
+Bounded presets apply to all three operations. They limit native processing windows; guide estimation and the complete ComfyUI IMAGE input and output still reside in memory. The runtime report shows the resolved Auto scenario, execution mode, active settings, frame counts, and input/output dimensions. Scale and quality apply to upscaling; look and effect strength apply to neural rendering.
 
 ## ComfyUI workflow screenshots
 
@@ -330,7 +332,7 @@ Frame Generation uses the open-source [DLSS-G Stream Worker](https://github.com/
 
 ### Persistent full sequence
 
-Uses exactly one SR and one NR VapourSynth graph for the complete batch. It removes native chunk resets, avoids crossfade seams, and was the fastest mode in the local 33-frame comparison.
+Uses exactly one VapourSynth graph per selected stage for the complete batch: SR and NR for the combined pipeline, or a single native call for an Easy single-stage operation. It removes native chunk resets, avoids crossfade seams, and was the fastest mode in the local 33-frame comparison.
 
 Use it when the complete ComfyUI IMAGE batch fits in RAM and sufficient temporary storage is available. It is not yet suitable for arbitrary multi-hour films because ComfyUI retains complete input and output tensors.
 
@@ -343,7 +345,9 @@ chunk_size: 8
 history_overlap: 8
 ```
 
-Larger chunks reduce overhead. More overlap gives a new native context more time to settle, at the cost of repeated work.
+`chunk_size` is the base frame count / stride between window starts. Each native window contains up to `chunk_size + history_overlap` frames, so these settings allow 16 frames per window. Final windows are shorter. The merged output retains chronological order and the original frame count.
+
+Larger chunks reduce overhead. More overlap gives a new native context more time to settle, at the cost of repeated work. Only native windows are bounded: the complete ComfyUI IMAGE input and output remain in memory.
 
 ## Node reference
 
@@ -368,7 +372,7 @@ The standalone Neural Rendering node always runs at 1:1 input resolution. Upscal
 
 ### DLSS SR + Experimental Neural Rendering (Advanced)
 
-Runs SR followed by neural rendering. `processing_mode` selects persistent or bounded overlap-add operation. `chunk_size` and `history_overlap` apply to bounded mode.
+Runs SR followed by neural rendering. `processing_mode` selects persistent or bounded overlap-add operation. In bounded mode, `chunk_size` sets the stride and each native window contains up to `chunk_size + history_overlap` frames. The complete ComfyUI IMAGE input and output remain in memory.
 
 ### Depth Anything V2 Guide
 
