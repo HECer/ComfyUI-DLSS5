@@ -205,21 +205,21 @@ Bounded presets apply to all three operations. They limit native processing wind
 
 Import [`workflows/00_easy_one_node_2x.json`](workflows/00_easy_one_node_2x.json) for the recommended first run. Select an image, choose the scenario and operation in the central Easy node, then inspect or save the output. The graph keeps setup choices in one place while still exposing the generated image and runtime report.
 
-![Complete Easy ComfyUI workflow with Load Image, Experimental DLSS Easy Upscale and Render, Preview, and Save nodes](docs/images/comfyui-easy-workflow.png)
+![Complete Easy ComfyUI workflow with Load Image, Experimental DLSS Easy Upscale and Render, Preview, and Save nodes](docs/images/comfyui-production-easy-workflow.png)
 
 The detailed view shows every Easy-node control: scenario, independent upscale/render operation, 2x–4x scale, DLSS quality preset, rendering look, and effect strength.
 
-![Detailed ComfyUI view of the Easy Upscale and Render node and its controls](docs/images/comfyui-easy-node-detail.png)
+![Detailed ComfyUI view of the Easy Upscale and Render node and its controls](docs/images/comfyui-production-easy-node-detail.png)
 
 ### Advanced guided workflow
 
 Import [`workflows/01_still_image_guided_2x.json`](workflows/01_still_image_guided_2x.json) when you want direct control over guide generation and the native pipeline. Depth Anything V2 supplies depth, the motion-guide node supplies current-to-previous motion, and the full pipeline receives color, depth, and motion as separate inputs.
 
-![Complete advanced ComfyUI workflow with depth, motion, full DLSS pipeline, preview, and save stages](docs/images/comfyui-advanced-workflow.png)
+![Complete advanced ComfyUI workflow with depth, motion, full DLSS pipeline, preview, and save stages](docs/images/comfyui-production-advanced-workflow.png)
 
 The close view makes the full-pipeline controls readable, including processing mode, history overlap, neural style, style strength, intensity, structure controls, automatic effects masking, and depth orientation.
 
-![Detailed ComfyUI view of the full DLSS SR and Neural Rendering node](docs/images/comfyui-advanced-node-detail.png)
+![Detailed ComfyUI view of the full DLSS SR and Neural Rendering node](docs/images/comfyui-production-advanced-node-detail.png)
 
 These screenshots show node layout and settings only; the placeholder image is bundled with ComfyUI and is not a quality result. See the Alyx comparison and persistent-video contact sheet above for representative output examples.
 
@@ -227,15 +227,15 @@ These screenshots show node layout and settings only; the placeholder image is b
 
 For new video projects, import [`workflows/04_video_vda_small_temporal_2x.json`](workflows/04_video_vda_small_temporal_2x.json). VDA-S reasons over 32-frame temporal windows and aligns overlapping windows, so it replaces the framewise Depth Anything V2 plus stabilizer chain. RAFT remains responsible for the separate motion-vector guide.
 
-![Complete VDA-S temporal-depth workflow in ComfyUI](docs/images/comfyui-vda-workflow.png)
+![Complete VDA-S temporal-depth workflow in ComfyUI](docs/images/comfyui-production-vda-workflow.png)
 
-![Detailed VDA-S and RAFT guide nodes in ComfyUI](docs/images/comfyui-vda-node-detail.png)
+![Detailed VDA-S and RAFT guide nodes in ComfyUI](docs/images/comfyui-production-vda-node-detail.png)
 
 The optional [`workflows/05_video_flashdepth_highres_2x.json`](workflows/05_video_flashdepth_highres_2x.json) targets high-resolution footage. FlashDepth is intentionally executed in its own environment because its official dependencies conflict with many current ComfyUI builds.
 
-![Complete optional FlashDepth workflow in ComfyUI](docs/images/comfyui-flashdepth-workflow.png)
+![Complete optional FlashDepth workflow in ComfyUI](docs/images/comfyui-production-flashdepth-workflow.png)
 
-![Detailed optional FlashDepth node in ComfyUI](docs/images/comfyui-flashdepth-node-detail.png)
+![Detailed optional FlashDepth node in ComfyUI](docs/images/comfyui-production-flashdepth-node-detail.png)
 
 ### Tested still-image variants
 
@@ -337,11 +337,11 @@ Import [`workflows/06_video_dlssg_24_to_48.json`](workflows/06_video_dlssg_24_to
 
 Frame Generation uses the open-source [DLSS-G Stream Worker](https://github.com/HECer/DLSSG-Stream-Worker). Select `Install verified Frame Generation` in the setup node, or run `python install_runtime.py --install-frame-generation` / `./install_runtime.ps1 -InstallFrameGeneration`. This optional action downloads the pinned worker and verifies its SHA-256 hash; the matching `nvngx_dlssg.dll` is bundled in `runtime/dlssg/`. See [runtime sources](docs/RUNTIME_SOURCES.md) before installing native binaries.
 
-![Complete DLSS Frame Generation workflow in ComfyUI](docs/images/comfyui-dlssg-workflow.png)
+![Complete DLSS Frame Generation workflow in ComfyUI](docs/images/comfyui-production-dlssg-workflow.png)
 
 *Complete 24-to-48 fps path: video input, RAFT motion, DLSS-G, runtime check, and encoding.*
 
-![Detailed DLSS Frame Generation and output settings in ComfyUI](docs/images/comfyui-dlssg-node-detail.png)
+![Detailed DLSS Frame Generation and output settings in ComfyUI](docs/images/comfyui-production-dlssg-node-detail.png)
 
 *The detail view shows the tested 2x preset, source FPS, scene-cut threshold, fail-fast behavior, and matching 48 fps encoder setting.*
 

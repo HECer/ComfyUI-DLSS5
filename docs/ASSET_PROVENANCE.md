@@ -24,7 +24,9 @@ The Gordon PNG contains a structurally detected `caBX` manifest-store chunk. Cry
 
 ## ComfyUI screenshots
 
-The four `comfyui-vda-*` and `comfyui-flashdepth-*` PNGs were captured from a local isolated ComfyUI 0.32.0 instance loading the published workflow JSON files. Their bounded metadata-privacy audits reported `NONE_OBSERVED`. Screenshots demonstrate graph layout and settings only; they are not inference-quality evidence.
+The ten `comfyui-production-*.png` files were captured on 2026-09-11 from the production ComfyUI 0.32.0 frontend (frontend package 1.48.7) on a loopback-only instance. The instance used the current repository checkout through a junction and the installed VideoHelperSuite node for the video examples. It loaded the published workflow JSON files and verified every node type through `/object_info` before capture. Screenshots demonstrate the graph layout and settings only; they are not inference-quality evidence and no workflow was executed during capture.
+
+The previous `comfyui-*` files remain as legacy captures for comparison, but the README links only to the production set above. The bounded metadata-privacy audit for each new PNG reported `NONE_OBSERVED`; no supported C2PA carrier was found, and cryptographic verification or signer trust was not available.
 
 ## Runtime proof derivatives
 
