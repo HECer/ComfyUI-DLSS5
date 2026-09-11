@@ -384,23 +384,24 @@ def _dlssg_scene_resets(images: torch.Tensor, threshold: float) -> list[bool]:
 
 
 class DLSSFrameGeneration:
+    DESCRIPTION = "Experimental external DLSS Frame Generation for a sequence. Supply current-to-previous motion vectors encoded around 0.5; install its optional worker before use."
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "images": ("IMAGE",),
-                "motion_vectors": ("IMAGE",),
-                "multiplier": (["2x", "3x", "4x"],),
+                "images": ("IMAGE", {"tooltip": "Input image sequence; Frame Generation requires at least two frames."}),
+                "motion_vectors": ("IMAGE", {"tooltip": "Current-to-previous motion encoded in RGB around 0.5, with horizontal and vertical components scaled to pixels."}),
+                "multiplier": (["2x", "3x", "4x"], {"tooltip": "Number of output frames per input interval; higher multipliers need more generated frames."}),
                 "input_fps": (
                     "FLOAT",
-                    {"default": 24.0, "min": 1.0, "max": 240.0, "step": 0.001},
+                    {"default": 24.0, "min": 1.0, "max": 240.0, "step": 0.001, "tooltip": "Source frame rate used to report the multiplied output frame rate."},
                 ),
                 "scene_cut_threshold": (
                     "FLOAT",
-                    {"default": 0.28, "min": 0.01, "max": 1.0, "step": 0.01},
+                    {"default": 0.28, "min": 0.01, "max": 1.0, "step": 0.01, "tooltip": "Detects scene changes and avoids interpolation across a cut."},
                 ),
                 "runtime_fallback": (
-                    ["Fail on missing frames (recommended)", "Hold previous frame"],
+                    ["Fail on missing frames (recommended)", "Hold previous frame"], {"tooltip": "Choose an explicit fallback if the experimental worker does not return every requested intermediate frame."},
                 ),
             }
         }
@@ -408,7 +409,7 @@ class DLSSFrameGeneration:
     RETURN_TYPES = ("IMAGE", "FLOAT", "STRING")
     RETURN_NAMES = ("interpolated_frames", "output_fps", "runtime_report")
     FUNCTION = "generate"
-    CATEGORY = "image/NVIDIA DLSS 5/video"
+    CATEGORY = "Experimental DLSS Bridge/video"
 
     def generate(
         self,
@@ -490,6 +491,7 @@ class DLSSFrameGeneration:
 
 
 class DLSSFrameGenerationStatus:
+    DESCRIPTION = "Checks whether the optional experimental Frame Generation worker, runtime, and HAGS requirement are ready."
     @classmethod
     def INPUT_TYPES(cls):
         return {"required": {}}
@@ -497,7 +499,7 @@ class DLSSFrameGenerationStatus:
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("status",)
     FUNCTION = "status"
-    CATEGORY = "image/NVIDIA DLSS 5/video"
+    CATEGORY = "Experimental DLSS Bridge/video"
 
     def status(self):
         try:
@@ -515,6 +517,7 @@ class DLSSFrameGenerationStatus:
 
 
 class DLSSSuperResolution:
+    DESCRIPTION = "Experimental bridge to NVIDIA DLSS Super Resolution. Depth and motion_vectors are paired guides and must describe the same input frames."
     QUALITY = {
         "Quality": 2,
         "Balanced": 1,
@@ -528,18 +531,18 @@ class DLSSSuperResolution:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "image": ("IMAGE",),
-                "depth": ("IMAGE",),
-                "motion_vectors": ("IMAGE",),
-                "scale": (["2x", "3x", "4x"],),
-                "quality": (list(cls.QUALITY),),
+                "image": ("IMAGE", {"tooltip": "Input image or frame sequence to upscale."}),
+                "depth": ("IMAGE", {"tooltip": "Depth guide paired with motion_vectors for the same input frames."}),
+                "motion_vectors": ("IMAGE", {"tooltip": "Current-to-previous motion guide paired with depth; encoded around 0.5 in pixel-relative RGB values."}),
+                "scale": (["2x", "3x", "4x"], {"tooltip": "Grows output width and height by this factor, so 2x creates four times as many pixels."}),
+                "quality": (list(cls.QUALITY), {"tooltip": "DLSS quality preset; DLAA selects anti-aliasing, while scale still controls output dimensions."}),
             }
         }
 
     RETURN_TYPES = ("IMAGE", "STRING")
     RETURN_NAMES = ("image", "runtime_report")
     FUNCTION = "upscale"
-    CATEGORY = "image/NVIDIA DLSS 5"
+    CATEGORY = "Experimental DLSS Bridge/advanced"
 
     def upscale(self, image, depth, motion_vectors, scale, quality="Quality"):
         python, plugin, _runtime = _sr_runtime_paths()
@@ -606,34 +609,35 @@ class DLSSSuperResolution:
 
 
 class DLSS5FullPipeline:
+    DESCRIPTION = "Advanced experimental SR followed by Neural Rendering. Use paired depth and current-to-previous motion guides; persistent mode retains the original full-sequence behavior."
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "image": ("IMAGE",),
-                "depth": ("IMAGE",),
-                "motion_vectors": ("IMAGE",),
-                "scale": (["2x", "3x", "4x"],),
-                "sr_quality": (list(DLSSSuperResolution.QUALITY),),
+                "image": ("IMAGE", {"tooltip": "Input image or frame sequence processed by SR and Neural Rendering."}),
+                "depth": ("IMAGE", {"tooltip": "Depth guide paired with motion_vectors for every input frame."}),
+                "motion_vectors": ("IMAGE", {"tooltip": "Current-to-previous pixel motion guide paired with depth and encoded around 0.5."}),
+                "scale": (["2x", "3x", "4x"], {"tooltip": "Grows output width and height by this factor; 2x means four times the pixels."}),
+                "sr_quality": (list(DLSSSuperResolution.QUALITY), {"tooltip": "DLSS Super Resolution quality preset."}),
                 "processing_mode": (
-                    ["Persistent full sequence", "Bounded overlap-add"],
+                    ["Persistent full sequence", "Bounded overlap-add"], {"tooltip": "Persistent processes the whole sequence; bounded overlap-add limits memory while retaining overlap context."},
                 ),
-                "chunk_size": ("INT", {"default": 8, "min": 2, "max": 64}),
-                "history_overlap": ("INT", {"default": 8, "min": 0, "max": 32}),
-                "style": (["0 - neutral", "1", "2"],),
-                "style_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0}),
-                "intensity": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0}),
-                "local_structure": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 2.0}),
-                "skin_structure": ("FLOAT", {"default": -1.0, "min": -1.0, "max": 2.0}),
-                "auto_mask": ("BOOLEAN", {"default": True}),
-                "depth_inverted": ("BOOLEAN", {"default": False}),
+                "chunk_size": ("INT", {"default": 8, "min": 2, "max": 64, "tooltip": "Frames per bounded processing window; ignored by Persistent full sequence."}),
+                "history_overlap": ("INT", {"default": 8, "min": 0, "max": 32, "tooltip": "Prior frames repeated for bounded windows; ignored by Persistent full sequence."}),
+                "style": (["0 - neutral", "1", "2"], {"tooltip": "Neural Rendering style selection; 0 is neutral."}),
+                "style_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "tooltip": "Amount of the selected Neural Rendering style."}),
+                "intensity": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "tooltip": "Overall Neural Rendering effect intensity."}),
+                "local_structure": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 2.0, "tooltip": "Preserves local structure during Neural Rendering."}),
+                "skin_structure": ("FLOAT", {"default": -1.0, "min": -1.0, "max": 2.0, "tooltip": "-1 delegates skin structure to the runtime; non-negative values override it."}),
+                "auto_mask": ("BOOLEAN", {"default": True, "tooltip": "Lets the runtime generate a mask when no explicit effect mask is used."}),
+                "depth_inverted": ("BOOLEAN", {"default": False, "tooltip": "Enable only when the supplied depth guide uses the opposite near/far convention."}),
             }
         }
 
     RETURN_TYPES = ("IMAGE", "STRING")
     RETURN_NAMES = ("image", "runtime_report")
     FUNCTION = "run"
-    CATEGORY = "image/NVIDIA DLSS 5"
+    CATEGORY = "Experimental DLSS Bridge/advanced"
 
     def run(
         self,
@@ -685,6 +689,7 @@ class DLSS5FullPipeline:
 
 class DLSS5EasyPipeline:
     """Opinionated one-node path; advanced nodes remain available for authored guides."""
+    DESCRIPTION = "Experimental one-node DLSS path. Scenario selects bounded processing, currently limited to Upscale + neural rendering; quality is ignored for Neural rendering only, and scale is ignored when no upscaling operation is selected."
 
     SCENARIOS = [
         "Auto (recommended)",
@@ -703,23 +708,23 @@ class DLSS5EasyPipeline:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "image": ("IMAGE",),
-                "scenario": (cls.SCENARIOS,),
+                "image": ("IMAGE", {"tooltip": "Input image or frame sequence; Auto selects a preset from its frame count."}),
+                "scenario": (cls.SCENARIOS, {"tooltip": "Chooses the Easy processing preset and whether a sequence is bounded for memory."}),
                 "operation": (
                     [
                         "Upscale + neural rendering",
                         "Upscale only",
                         "Neural rendering only",
-                    ],
+                    ], {"tooltip": "Choose SR plus rendering, SR alone, or Neural Rendering alone. Scale and quality are ignored for Neural Rendering only."},
                 ),
-                "scale": (["2x", "3x", "4x"],),
+                "scale": (["2x", "3x", "4x"], {"tooltip": "Grows output width and height; ignored for Neural Rendering only."}),
                 "quality": (
-                    ["Quality", "Balanced", "Performance", "Ultra Performance"],
+                    ["Quality", "Balanced", "Performance", "Ultra Performance"], {"tooltip": "Super Resolution quality preset; ignored for Neural Rendering only."},
                 ),
-                "look": (list(cls.LOOKS),),
+                "look": (list(cls.LOOKS), {"tooltip": "Easy Neural Rendering look; this preset sets style and structure controls, and is ignored for Upscale only."}),
                 "effect_strength": (
                     "FLOAT",
-                    {"default": 0.85, "min": 0.0, "max": 1.0, "step": 0.01},
+                    {"default": 0.85, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "Blends the selected Easy look; ignored for Upscale only."},
                 ),
             }
         }
@@ -727,7 +732,7 @@ class DLSS5EasyPipeline:
     RETURN_TYPES = ("IMAGE", "STRING")
     RETURN_NAMES = ("image", "runtime_report")
     FUNCTION = "run"
-    CATEGORY = "image/Experimental DLSS Bridge"
+    CATEGORY = "Experimental DLSS Bridge"
 
     def run(self, image, scenario, operation, scale, quality, look, effect_strength):
         preset = _easy_preset(scenario, int(image.shape[0]))
@@ -786,42 +791,43 @@ class DLSS5EasyPipeline:
 
 
 class DLSS5NeuralRendering:
+    DESCRIPTION = "Experimental DLSS Neural Rendering. Connect both depth and motion_vectors together for temporal guidance; skin -1 delegates to the runtime, and first use may download the required model."
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "image": ("IMAGE",),
-                "style": (["0 - neutral", "1", "2"],),
+                "image": ("IMAGE", {"tooltip": "Input image or frame sequence for Neural Rendering."}),
+                "style": (["0 - neutral", "1", "2"], {"tooltip": "Neural Rendering style; 0 is the neutral baseline."}),
                 "style_strength": (
                     "FLOAT",
-                    {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01},
+                    {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "Amount of the selected style."},
                 ),
                 "intensity": (
                     "FLOAT",
-                    {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01},
+                    {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "Overall Neural Rendering effect intensity."},
                 ),
                 "local_structure": (
                     "FLOAT",
-                    {"default": 1.0, "min": 0.0, "max": 2.0, "step": 0.01},
+                    {"default": 1.0, "min": 0.0, "max": 2.0, "step": 0.01, "tooltip": "Local structure preservation strength."},
                 ),
                 "skin_structure": (
                     "FLOAT",
-                    {"default": -1.0, "min": -1.0, "max": 2.0, "step": 0.01},
+                    {"default": -1.0, "min": -1.0, "max": 2.0, "step": 0.01, "tooltip": "-1 delegates skin structure to the runtime; non-negative values override it."},
                 ),
-                "auto_mask": ("BOOLEAN", {"default": True}),
-                "depth_inverted": ("BOOLEAN", {"default": False}),
+                "auto_mask": ("BOOLEAN", {"default": True, "tooltip": "Requests automatic runtime masking independently of effect_mask; any supplied effect mask limits the final image afterward."}),
+                "depth_inverted": ("BOOLEAN", {"default": False, "tooltip": "Enable only if the supplied depth guide is near/far inverted."}),
             },
             "optional": {
-                "effect_mask": ("MASK",),
-                "depth": ("IMAGE",),
-                "motion_vectors": ("IMAGE",),
+                "effect_mask": ("MASK", {"tooltip": "Optional mask that limits Neural Rendering to selected image areas."}),
+                "depth": ("IMAGE", {"tooltip": "Optional depth guide; connect it only together with motion_vectors."}),
+                "motion_vectors": ("IMAGE", {"tooltip": "Optional current-to-previous motion guide; connect it only together with depth."}),
             },
         }
 
     RETURN_TYPES = ("IMAGE", "STRING")
     RETURN_NAMES = ("image", "runtime_report")
     FUNCTION = "render"
-    CATEGORY = "image/NVIDIA DLSS 5"
+    CATEGORY = "Experimental DLSS Bridge/advanced"
 
     def render(
         self,
@@ -909,25 +915,26 @@ class DLSS5NeuralRendering:
 
 class DLSS5OpticalFlow:
     """Generate dense current-to-previous pixel motion, encoded as a Comfy IMAGE."""
+    DESCRIPTION = "Fast optical-flow guide for experimental DLSS nodes. It produces current-to-previous pixel motion in RGB, encoded around 0.5."
 
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "images": ("IMAGE",),
+                "images": ("IMAGE", {"tooltip": "Input frame sequence used to estimate current-to-previous motion."}),
                 "pyramid_scale": (
                     "FLOAT",
-                    {"default": 0.5, "min": 0.1, "max": 0.9, "step": 0.05},
+                    {"default": 0.5, "min": 0.1, "max": 0.9, "step": 0.05, "tooltip": "Image-pyramid downscale for the fast optical-flow estimator."},
                 ),
-                "levels": ("INT", {"default": 5, "min": 1, "max": 8}),
-                "window_size": ("INT", {"default": 21, "min": 5, "max": 51, "step": 2}),
+                "levels": ("INT", {"default": 5, "min": 1, "max": 8, "tooltip": "Number of optical-flow pyramid levels."}),
+                "window_size": ("INT", {"default": 21, "min": 5, "max": 51, "step": 2, "tooltip": "Pixel neighborhood used by the optical-flow solver."}),
             }
         }
 
     RETURN_TYPES = ("IMAGE",)
     RETURN_NAMES = ("motion_vectors",)
     FUNCTION = "estimate"
-    CATEGORY = "image/NVIDIA DLSS 5/guides"
+    CATEGORY = "Experimental DLSS Bridge/guides"
 
     def estimate(self, images, pyramid_scale, levels, window_size):
         import cv2
@@ -965,20 +972,21 @@ class DLSS5OpticalFlow:
 
 
 class DLSS5RAFTFlow:
+    DESCRIPTION = "Higher-quality RAFT motion guide for experimental DLSS nodes. It downloads the selected RAFT weights on first use and encodes current-to-previous pixel motion around 0.5."
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "images": ("IMAGE",),
-                "model": (["RAFT Large (best)", "RAFT Small (fast)"],),
-                "chunk_size": ("INT", {"default": 2, "min": 1, "max": 16}),
+                "images": ("IMAGE", {"tooltip": "Input frame sequence used to estimate current-to-previous motion."}),
+                "model": (["RAFT Large (best)", "RAFT Small (fast)"], {"tooltip": "RAFT weight set; the selected model downloads on first use."}),
+                "chunk_size": ("INT", {"default": 2, "min": 1, "max": 16, "tooltip": "Number of frame pairs inferred together; reduce it if memory is limited."}),
             }
         }
 
     RETURN_TYPES = ("IMAGE",)
     RETURN_NAMES = ("motion_vectors",)
     FUNCTION = "estimate"
-    CATEGORY = "image/NVIDIA DLSS 5/guides"
+    CATEGORY = "Experimental DLSS Bridge/guides"
 
     def estimate(self, images, model, chunk_size):
         from torchvision.models.optical_flow import (
@@ -1045,20 +1053,21 @@ class DLSS5RAFTFlow:
 
 class DLSS5TemporalDepthStabilize:
     """Reproject the prior stabilized depth with current-to-previous motion."""
+    DESCRIPTION = "Stabilizes a depth sequence by reprojection with current-to-previous motion. Use matching frames and the same 0.5-centered motion encoding used by the guide nodes."
 
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "depth": ("IMAGE",),
-                "motion_vectors": ("IMAGE",),
+                "depth": ("IMAGE", {"tooltip": "Depth sequence to stabilize temporally."}),
+                "motion_vectors": ("IMAGE", {"tooltip": "Matching current-to-previous motion encoded around 0.5 in pixel-relative channels."}),
                 "strength": (
                     "FLOAT",
-                    {"default": 0.7, "min": 0.0, "max": 1.0, "step": 0.01},
+                    {"default": 0.7, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "Blend strength for reprojected prior depth."},
                 ),
                 "disocclusion_threshold": (
                     "FLOAT",
-                    {"default": 0.08, "min": 0.001, "max": 1.0, "step": 0.001},
+                    {"default": 0.08, "min": 0.001, "max": 1.0, "step": 0.001, "tooltip": "Depth difference at which reprojection confidence falls for disocclusions."},
                 ),
             }
         }
@@ -1066,7 +1075,7 @@ class DLSS5TemporalDepthStabilize:
     RETURN_TYPES = ("IMAGE",)
     RETURN_NAMES = ("depth",)
     FUNCTION = "stabilize"
-    CATEGORY = "image/NVIDIA DLSS 5/guides"
+    CATEGORY = "Experimental DLSS Bridge/guides"
 
     def stabilize(self, depth, motion_vectors, strength, disocclusion_threshold):
         if depth.shape[0] != motion_vectors.shape[0]:
@@ -1113,6 +1122,7 @@ class DLSS5TemporalDepthStabilize:
 
 
 class DLSS5DepthAnythingV2:
+    DESCRIPTION = "Depth Anything V2 guide for experimental DLSS nodes. The selected model downloads on first use; keep temporal normalization for a stable sequence-wide depth range."
     MODELS = {
         "Small (recommended)": "depth-anything/Depth-Anything-V2-Small-hf",
         "Base": "depth-anything/Depth-Anything-V2-Base-hf",
@@ -1123,17 +1133,17 @@ class DLSS5DepthAnythingV2:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "images": ("IMAGE",),
-                "model": (list(cls.MODELS),),
-                "temporal_normalization": ("BOOLEAN", {"default": True}),
-                "chunk_size": ("INT", {"default": 4, "min": 1, "max": 32}),
+                "images": ("IMAGE", {"tooltip": "Input image or sequence used for depth estimation."}),
+                "model": (list(cls.MODELS), {"tooltip": "Depth Anything V2 model; its weights download on first use."}),
+                "temporal_normalization": ("BOOLEAN", {"default": True, "tooltip": "Uses one depth range across the sequence to reduce temporal flicker."}),
+                "chunk_size": ("INT", {"default": 4, "min": 1, "max": 32, "tooltip": "Frames estimated together; reduce it when memory is limited."}),
             }
         }
 
     RETURN_TYPES = ("IMAGE",)
     RETURN_NAMES = ("depth",)
     FUNCTION = "estimate"
-    CATEGORY = "image/NVIDIA DLSS 5/guides"
+    CATEGORY = "Experimental DLSS Bridge/guides"
 
     def estimate(self, images, model, temporal_normalization, chunk_size):
         from transformers import AutoImageProcessor, AutoModelForDepthEstimation
@@ -1187,21 +1197,22 @@ class DLSS5DepthAnythingV2:
 
 class DLSS5VideoDepthAnything:
     """Temporally consistent depth using the official Apache-2.0 VDA-S model."""
+    DESCRIPTION = "Video Depth Anything Small creates temporally consistent depth guides for experimental DLSS workflows. The VDA-S model downloads on first use."
 
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "images": ("IMAGE",),
-                "input_size": (["280 (compatible)", "392 (fast)", "518 (best)"],),
-                "precision": (["FP16 (recommended)", "FP32"],),
+                "images": ("IMAGE", {"tooltip": "Input frame sequence used for VDA-S depth estimation."}),
+                "input_size": (["280 (compatible)", "392 (fast)", "518 (best)"], {"tooltip": "VDA-S inference size; larger sizes favor detail while using more memory."}),
+                "precision": (["FP16 (recommended)", "FP32"], {"tooltip": "Inference precision; FP32 is slower and uses more memory."}),
             }
         }
 
     RETURN_TYPES = ("IMAGE",)
     RETURN_NAMES = ("temporally_consistent_depth",)
     FUNCTION = "estimate"
-    CATEGORY = "image/NVIDIA DLSS 5/guides"
+    CATEGORY = "Experimental DLSS Bridge/guides"
 
     def estimate(self, images, input_size, precision):
         from .video_depth_backend import infer_vda_small
@@ -1213,23 +1224,24 @@ class DLSS5VideoDepthAnything:
 
 class DLSS5FlashDepth:
     """High-resolution FlashDepth through a conflict-free external environment."""
+    DESCRIPTION = "Optional high-resolution FlashDepth guide through a separate environment. It is experimental and may download its selected model on first use."
 
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "images": ("IMAGE",),
-                "variant": (["FlashDepth-L (low resolution)", "FlashDepth Full (2K)"],),
-                "flashdepth_python": ("STRING", {"default": ""}),
-                "flashdepth_repository": ("STRING", {"default": ""}),
-                "fps": ("FLOAT", {"default": 24.0, "min": 1.0, "max": 240.0}),
+                "images": ("IMAGE", {"tooltip": "Input frame sequence sent to the separate FlashDepth environment."}),
+                "variant": (["FlashDepth-L (low resolution)", "FlashDepth Full (2K)"], {"tooltip": "FlashDepth model variant; its assets may download on first use."}),
+                "flashdepth_python": ("STRING", {"default": "", "tooltip": "Required path to the isolated FlashDepth environment Python executable; blank values fail validation."}),
+                "flashdepth_repository": ("STRING", {"default": "", "tooltip": "Required path to the FlashDepth checkout containing train.py; blank values fail validation."}),
+                "fps": ("FLOAT", {"default": 24.0, "min": 1.0, "max": 240.0, "tooltip": "Frame rate passed to FlashDepth for temporal processing."}),
             }
         }
 
     RETURN_TYPES = ("IMAGE",)
     RETURN_NAMES = ("temporally_consistent_depth",)
     FUNCTION = "estimate"
-    CATEGORY = "image/NVIDIA DLSS 5/guides/optional"
+    CATEGORY = "Experimental DLSS Bridge/guides/optional"
 
     def estimate(self, images, variant, flashdepth_python, flashdepth_repository, fps):
         from .video_depth_backend import infer_flashdepth_external
@@ -1238,13 +1250,14 @@ class DLSS5FlashDepth:
 
 
 class DLSS5RuntimeStatus:
+    DESCRIPTION = "Read-only readiness report for the experimental Neural Rendering and Super Resolution bridge files."
     @classmethod
     def INPUT_TYPES(cls):
         return {"required": {}}
 
     RETURN_TYPES = ("STRING",)
     FUNCTION = "status"
-    CATEGORY = "image/NVIDIA DLSS 5"
+    CATEGORY = "Experimental DLSS Bridge/setup"
 
     def status(self):
         try:
@@ -1261,6 +1274,7 @@ class DLSS5RuntimeStatus:
 
 
 class DLSS5RuntimeSetup:
+    DESCRIPTION = "One-click setup for the experimental DLSS bridge. Downloads occur only after confirmation; Frame Generation is optional and installed separately."
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -1269,8 +1283,8 @@ class DLSS5RuntimeSetup:
                     "Check location",
                     "Install verified VapourKit",
                     "Install verified Frame Generation",
-                ],),
-                "confirm_download": ("BOOLEAN", {"default": False}),
+                ], {"tooltip": "Check readiness, install the verified bridge, or install optional Frame Generation separately."}),
+                "confirm_download": ("BOOLEAN", {"default": False, "tooltip": "Required before any verified download starts; Check location does not download."}),
             }
         }
 
@@ -1278,7 +1292,7 @@ class DLSS5RuntimeSetup:
     RETURN_NAMES = ("setup_report",)
     FUNCTION = "run"
     OUTPUT_NODE = True
-    CATEGORY = "image/Experimental DLSS Bridge/setup"
+    CATEGORY = "Experimental DLSS Bridge/setup"
 
     def run(self, action, confirm_download):
         runtime_dir = PACKAGE / "runtime"

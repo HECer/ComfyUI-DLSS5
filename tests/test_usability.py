@@ -688,3 +688,161 @@ def test_bridge_numpy_failures_are_actionable_and_preserve_config(
         install_runtime.install()
 
     assert (runtime / "config.json").read_bytes() == original
+
+
+def _schema_contract(node_class):
+    schema = node_class.INPUT_TYPES()
+    return {
+        group: {
+            name: (
+                value[0],
+                {key: setting for key, setting in value[1].items() if key != "tooltip"}
+                if len(value) > 1
+                else {},
+            )
+            for name, value in fields.items()
+        }
+        for group, fields in schema.items()
+    }
+
+
+def _baseline_nodes():
+    source = subprocess.run(
+        ["git", "show", "9d1c34b:nodes.py"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    ).stdout
+    baseline = types.ModuleType("usability_baseline_nodes")
+    baseline.__file__ = str(ROOT / "nodes.py")
+    exec(compile(source, "9d1c34b:nodes.py", "exec"), baseline.__dict__)
+    return baseline
+
+
+def test_node_help_all_nodes_describe_every_user_facing_input():
+    descriptions = []
+    for node_class in nodes.NODE_CLASS_MAPPINGS.values():
+        description = getattr(node_class, "DESCRIPTION", "")
+        assert isinstance(description, str) and len(description) >= 40
+        descriptions.append(description)
+        for fields in node_class.INPUT_TYPES().values():
+            for value in fields.values():
+                assert len(value) > 1
+                tooltip = value[1].get("tooltip")
+                assert isinstance(tooltip, str) and len(tooltip) >= 20
+
+    help_text = " ".join(descriptions).lower()
+    for phrase in (
+        "ignored",
+        "current-to-previous",
+        "0.5",
+        "pixel",
+        "-1",
+        "both depth and motion",
+        "experimental",
+        "first use",
+        "download",
+    ):
+        assert phrase in help_text
+
+
+def test_node_help_dlaa_still_uses_the_selected_scale_for_output_dimensions():
+    tooltip = nodes.DLSSSuperResolution.INPUT_TYPES()["required"]["quality"][1]["tooltip"]
+
+    assert "DLAA" in tooltip
+    assert "scale still controls output dimensions" in tooltip
+
+
+def test_node_help_easy_controls_explain_inactive_and_bounded_limits():
+    schema = nodes.DLSS5EasyPipeline.INPUT_TYPES()["required"]
+
+    assert "ignored for Upscale only" in schema["look"][1]["tooltip"]
+    assert "ignored for Upscale only" in schema["effect_strength"][1]["tooltip"]
+    assert "currently limited to Upscale + neural rendering" in nodes.DLSS5EasyPipeline.DESCRIPTION
+
+
+def test_node_help_flashdepth_requires_explicit_environment_paths():
+    schema = nodes.DLSS5FlashDepth.INPUT_TYPES()["required"]
+
+    for field in ("flashdepth_python", "flashdepth_repository"):
+        tooltip = schema[field][1]["tooltip"].lower()
+        assert "leave blank" not in tooltip
+        assert "configured default" not in tooltip
+        assert "required" in tooltip
+
+
+def test_node_help_effect_mask_does_not_disable_automatic_masking():
+    tooltip = nodes.DLSS5NeuralRendering.INPUT_TYPES()["required"]["auto_mask"][1]["tooltip"].lower()
+
+    assert "independently" in tooltip
+    assert "effect_mask" in tooltip
+
+
+def test_workflow_compatibility_preserves_baseline_contracts_and_groups_nodes():
+    baseline = _baseline_nodes()
+    assert list(nodes.NODE_CLASS_MAPPINGS) == list(baseline.NODE_CLASS_MAPPINGS)
+    assert nodes.NODE_DISPLAY_NAME_MAPPINGS == baseline.NODE_DISPLAY_NAME_MAPPINGS
+
+    for node_id, node_class in nodes.NODE_CLASS_MAPPINGS.items():
+        prior = baseline.NODE_CLASS_MAPPINGS[node_id]
+        current_contract = _schema_contract(node_class)
+        baseline_contract = _schema_contract(prior)
+        if node_id == "DLSS5RuntimeSetup":
+            current_actions = current_contract["required"]["action"][0]
+            baseline_actions = baseline_contract["required"]["action"][0]
+            assert current_actions[: len(baseline_actions)] == baseline_actions
+            baseline_contract["required"]["action"] = current_contract["required"]["action"]
+        assert current_contract == baseline_contract
+        assert list(node_class.INPUT_TYPES().keys()) == list(prior.INPUT_TYPES().keys())
+        for group in node_class.INPUT_TYPES():
+            assert list(node_class.INPUT_TYPES()[group]) == list(prior.INPUT_TYPES()[group])
+        assert node_class.RETURN_TYPES == prior.RETURN_TYPES
+        assert getattr(node_class, "RETURN_NAMES", None) == getattr(prior, "RETURN_NAMES", None)
+        assert node_class.FUNCTION == prior.FUNCTION
+        assert node_class.CATEGORY.startswith("Experimental DLSS Bridge")
+
+
+def test_workflow_compatibility_bundled_workflows_keep_node_inputs_and_widgets():
+    for workflow_path in (ROOT / "workflows").glob("*.json"):
+        workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
+        workflow_nodes = {node["id"]: node for node in workflow["nodes"]}
+        for workflow_node in workflow["nodes"]:
+            node_class = nodes.NODE_CLASS_MAPPINGS.get(workflow_node["type"])
+            if node_class is None:
+                continue
+            schema = node_class.INPUT_TYPES()
+            input_names = set(schema.get("required", {})) | set(schema.get("optional", {}))
+            assert all(entry["name"] in input_names for entry in workflow_node["inputs"])
+            widgets = [
+                (name, value)
+                for name, value in schema.get("required", {}).items()
+                if not (isinstance(value[0], str) and value[0] in {"IMAGE", "MASK"})
+            ]
+            values = workflow_node.get("widgets_values", [])
+            if not isinstance(values, list):
+                continue
+            assert len(values) == len(widgets)
+            for (_name, (widget_type, options)), saved_value in zip(widgets, values):
+                if isinstance(widget_type, list):
+                    assert saved_value in widget_type
+                elif isinstance(saved_value, (int, float)):
+                    assert options.get("min", saved_value) <= saved_value <= options.get("max", saved_value)
+
+        for link_id, source_id, source_slot, target_id, target_slot, link_type in workflow["links"]:
+            source = workflow_nodes[source_id]
+            target = workflow_nodes[target_id]
+            target_input = next(entry for entry in target["inputs"] if entry.get("link") == link_id)
+            source_class = nodes.NODE_CLASS_MAPPINGS.get(source["type"])
+            target_class = nodes.NODE_CLASS_MAPPINGS.get(target["type"])
+            if source_class is not None:
+                assert source_class.RETURN_TYPES[source_slot] == link_type
+            if target_class is not None:
+                target_schema = target_class.INPUT_TYPES()
+                expected_type = next(
+                    fields[target_input["name"]][0]
+                    for fields in target_schema.values()
+                    if target_input["name"] in fields
+                )
+                assert expected_type == link_type

@@ -1,0 +1,1 @@
+class Probe { static int Main(string[] args) { string dir = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location); System.IO.File.WriteAllLines(System.IO.Path.Combine(dir, "args.txt"), args); return 0; } }

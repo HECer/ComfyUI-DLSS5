@@ -8,3 +8,6 @@ route=codex-frontier (gate failure escalated by project rule); codex implemented
 
 ## 2026-09-11 — DLSS-2: Separate optional Frame Generation installation
 Supervisor verified the retained DLSS-2 implementation after the explicit checkpoint; no new implementation model call was made.
+
+## 2026-09-11 — DLSS-3: Node descriptions and backward-compatible navigation
+route=codex-standard (explicit project routing rule); codex implemented DLSS-3

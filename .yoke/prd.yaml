@@ -110,7 +110,7 @@
       verify:
         - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
           workflow_compatibility
-  passes: false
+  passes: true
   needs:
     - DLSS-2
   area: dlss-usability

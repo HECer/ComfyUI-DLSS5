@@ -1,0 +1,8 @@
+{
+  "custom": "kept",
+  "dlssg_runtime": "G:\\NN-Developed\\ComfxyUI-DLSS5\\ComfyUI-DLSS5\\.yoke\\worktrees\\story-f64735d63f1b7a6eae6463eee3c4897032c72a0412fccc8fb27709dd743ae950\\.pytest-tmp\\test_fg_install_validates_runt0\\runtime\\dlssg\\nvngx_dlssg.dll",
+  "dlssg_runtime_sha256": "runtime-hash",
+  "dlssg_worker": "G:\\NN-Developed\\ComfxyUI-DLSS5\\ComfyUI-DLSS5\\.yoke\\worktrees\\story-f64735d63f1b7a6eae6463eee3c4897032c72a0412fccc8fb27709dd743ae950\\.pytest-tmp\\test_fg_install_validates_runt0\\runtime\\dlssg\\dlssg-worker.exe",
+  "dlssg_worker_release": "v0.1.0",
+  "dlssg_worker_sha256": "worker-hash"
+}

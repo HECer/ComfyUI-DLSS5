@@ -484,7 +484,7 @@
                 {
                     "name": "images",
                     "type": "IMAGE",
-                    "link": 7
+                    "link": 10
                 }
             ],
             "outputs": [],

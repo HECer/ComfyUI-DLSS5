@@ -1,0 +1,9 @@
+{
+  "custom": "kept",
+  "timeout_seconds": 71,
+  "dlssg_runtime": "G:\\NN-Developed\\ComfxyUI-DLSS5\\ComfyUI-DLSS5\\.yoke\\worktrees\\story-f64735d63f1b7a6eae6463eee3c4897032c72a0412fccc8fb27709dd743ae950\\.pytest-tmp\\test_fg_install_setup_action_e1\\runtime\\dlssg\\nvngx_dlssg.dll",
+  "dlssg_runtime_sha256": "1a14dcda765d813cab1c40993648c1b92fb8b92165e155efe000d86c5450fc65",
+  "dlssg_worker": "G:\\NN-Developed\\ComfxyUI-DLSS5\\ComfyUI-DLSS5\\.yoke\\worktrees\\story-f64735d63f1b7a6eae6463eee3c4897032c72a0412fccc8fb27709dd743ae950\\.pytest-tmp\\test_fg_install_setup_action_e1\\runtime\\dlssg\\dlssg-worker.exe",
+  "dlssg_worker_release": "v0.1.0",
+  "dlssg_worker_sha256": "7b279e26770993e30d208a61f4c41773128bb6f011ff12f3ce3b6019fbcbd1fc"
+}

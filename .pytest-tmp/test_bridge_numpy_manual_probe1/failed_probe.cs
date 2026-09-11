@@ -1,0 +1,1 @@
+class Probe { static int Main() { System.Console.Error.WriteLine("ModuleNotFoundError: No module named numpy"); return 1; } }

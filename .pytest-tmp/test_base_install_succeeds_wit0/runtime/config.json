@@ -1,0 +1,19 @@
+{
+  "custom": "kept",
+  "dlssg_runtime": "D:/existing/nvngx_dlssg.dll",
+  "dlssg_worker": "D:/existing/dlssg-worker.exe",
+  "dlssg_worker_sha256": "existing-worker-hash",
+  "python": "G:\\NN-Developed\\ComfxyUI-DLSS5\\ComfyUI-DLSS5\\.yoke\\worktrees\\story-f64735d63f1b7a6eae6463eee3c4897032c72a0412fccc8fb27709dd743ae950\\.pytest-tmp\\test_base_install_succeeds_wit0\\runtime\\nightly-2026-08-31\\python.exe",
+  "nr_plugin": "G:\\NN-Developed\\ComfxyUI-DLSS5\\ComfyUI-DLSS5\\.yoke\\worktrees\\story-f64735d63f1b7a6eae6463eee3c4897032c72a0412fccc8fb27709dd743ae950\\.pytest-tmp\\test_base_install_succeeds_wit0\\runtime\\vsdlssnr.dll",
+  "nr_runtime": "G:\\NN-Developed\\ComfxyUI-DLSS5\\ComfyUI-DLSS5\\.yoke\\worktrees\\story-f64735d63f1b7a6eae6463eee3c4897032c72a0412fccc8fb27709dd743ae950\\.pytest-tmp\\test_base_install_succeeds_wit0\\runtime\\nvngx_dlssnr.dll",
+  "nvidia_dlssnr_sha256": "8270b350cd82de5ce89806872cdd6b6a9249b80836b91bbeb3573470744cc206",
+  "sr_plugin": "G:\\NN-Developed\\ComfxyUI-DLSS5\\ComfyUI-DLSS5\\.yoke\\worktrees\\story-f64735d63f1b7a6eae6463eee3c4897032c72a0412fccc8fb27709dd743ae950\\.pytest-tmp\\test_base_install_succeeds_wit0\\runtime\\vsdlsssr.dll",
+  "sr_runtime": "G:\\NN-Developed\\ComfxyUI-DLSS5\\ComfyUI-DLSS5\\.yoke\\worktrees\\story-f64735d63f1b7a6eae6463eee3c4897032c72a0412fccc8fb27709dd743ae950\\.pytest-tmp\\test_base_install_succeeds_wit0\\runtime\\nvngx_dlss.dll",
+  "vapourkit_release": "nightly-2026-08-31",
+  "vapourkit_archive_sha256": "af3ecfb868a96477ab10e1588d7bac0fb2729332f2f464b998677efdee9e0554",
+  "nvidia_dlss_release": "v310.7.0",
+  "nvidia_dlss_sha256": "be6e434a94ca32499515eb62ca0e6c274526055d568d0426e4c652dcdfb6ee6e",
+  "numpy_version": "2.5.2",
+  "temp_dir": "G:\\NN-Developed\\ComfxyUI-DLSS5\\ComfyUI-DLSS5\\.yoke\\worktrees\\story-f64735d63f1b7a6eae6463eee3c4897032c72a0412fccc8fb27709dd743ae950\\.pytest-tmp\\test_base_install_succeeds_wit0\\runtime\\temp",
+  "timeout_seconds": 0
+}
