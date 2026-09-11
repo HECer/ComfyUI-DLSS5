@@ -1,8 +1,14 @@
 # Example workflows
 
+Complete the [installation and base runtime check](../README.md#first-run-install-check-make-an-image) first. Base SR/NR setup is repeatable and preserves custom configuration; optional Frame Generation has a separate install action. All video examples require Video Helper Suite for loading. Workflows 02, 03 and 06 include an encoder; 04 and 05 end in Preview Image, so connect a video encoder yourself and set the source FPS before exporting.
+
 ## 00 — Easy one-node 2x
 
-The recommended first run. Connect an image to the Easy node, select a scenario, and run. The node automatically builds depth and motion guides; the other workflows expose those stages for inspection and customization.
+Import [00_easy_one_node_2x.json](00_easy_one_node_2x.json), select your own image in Load Image, and queue the default settings. Inspect the 2x preview and the Save Image result under ComfyUI's output directory with prefix `DLSS5/easy-2x`.
+
+Easy uses Depth Anything V2 Small (DA-V2) for every scenario, with first-use weight downloads. A still uses zero motion; video presets use optical flow or RAFT and temporal depth stabilization. VDA is a separate model in workflow 04, not an automatic Easy substitution. Easy preflights only the selected SR/NR stages before guide work. Scale and quality are inactive for Neural rendering only; look and effect strength are inactive for Upscale only.
+
+Long video uses up to 24 frames per native window; Fast preview uses up to 10, for all operations. Only native windows are bounded: the complete ComfyUI IMAGE input and output remain in memory. Easy's report shows the resolved scenario, active settings, dimensions, frame counts and advisory storage estimate. Follow ComfyUI progress and console output; cancel through ComfyUI. SR/NR children are stopped before cleanup. Optional VDA/FlashDepth progress and cancellation occur at stage boundaries. See [memory and cancellation details](../README.md#progress-cancellation-and-storage-advice).
 
 ## 01 — Still image, guided 2x
 
@@ -32,8 +38,8 @@ Loads a video as an image batch, calculates current-to-previous RAFT motion, and
 one DLSS-G frame between consecutive source frames. Set both the DLSS-G node and encoder
 to the correct source and output rates. The included example uses 24 to 48 fps.
 
-This workflow requires the optional external files documented in
-[`runtime/README.md`](../runtime/README.md). Test the status node first. Hard scene cuts
+Select `Install verified Frame Generation` in Runtime Setup and enable confirmation to install the separate optional worker, as documented in
+[`runtime/README.md`](../runtime/README.md). Base installation does not download it. Run **DLSS Frame Generation Runtime Status** first. Hard scene cuts
 reset DLSS-G history and hold the preceding source frame to preserve duration.
 Missing runtime output fails the workflow by default; use the hold fallback only when
 you deliberately prefer constant duration over smooth interpolation.

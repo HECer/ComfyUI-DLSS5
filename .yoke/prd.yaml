@@ -293,7 +293,7 @@
       verify:
         - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
           integration_regression
-  passes: false
+  passes: true
   needs:
     - DLSS-6
   area: dlss-usability

@@ -1,5 +1,19 @@
 # Experimental DLSS Neural Rendering for ComfyUI
 
+## First run: install, check, make an image
+
+Start with a working Windows ComfyUI installation and an NVIDIA RTX GPU. This is an unofficial experimental bridge; review the [runtime sources and terms](docs/RUNTIME_SOURCES.md).
+
+1. **Install** ComfyUI-DLSS5 through **ComfyUI Manager** using `https://github.com/HECer/ComfyUI-DLSS5`, then restart ComfyUI to load its dependencies. Manual clones need Git LFS (`git lfs install`, then `git lfs pull` in the clone) for the bundled binaries.
+2. **Set up the base runtime.** Add **DLSS Runtime Setup (One Click)**, select `Check location` and queue it. Then select `Install verified VapourKit`, enable `confirm_download`, and queue again. This downloads the pinned isolated runtime as needed and preserves custom configuration. Restart ComfyUI.
+3. **Check** **DLSS 5 Runtime Status**. File entries should be `PRESENT`; Python, VapourSynth/NumPy imports and SR/NR plugin loads should report `PASS`. `Inference: UNTESTED` is expected: these checks do not render an image. Resolve any `FAIL`, `MISSING` or `LFS POINTER` using [Troubleshooting](docs/TROUBLESHOOTING.md).
+4. **Open the Easy workflow:** drag [`workflows/00_easy_one_node_2x.json`](workflows/00_easy_one_node_2x.json) into ComfyUI. In **Load Image**, select your own small image. Keep `Auto (recommended)`, `Upscale + neural rendering`, `2x`, `Quality`, and `Neutral / faithful` for the first attempt.
+5. **Queue** the workflow. Easy downloads **Depth Anything V2 Small** on first use; one still uses zero motion. Inspect the preview at 100%, then find the **Save Image** result under ComfyUI's output directory with prefix `DLSS5/easy-2x`. Expect one image with twice the input width and height. A successful render checks execution; judge image quality yourself.
+
+The base installation does not install the worker for **optional Frame Generation**. Use the separate `Install verified Frame Generation` action only for that path, then run **DLSS Frame Generation Runtime Status**; see [runtime setup](runtime/README.md). Re-running setup preserves existing custom settings and a correct junction. For an existing VapourKit installation, use the [manual setup](#manualexisting-vapourkit-setup) below.
+
+Easy uses DA-V2 even for video. Choose the separate [VDA workflow](workflows/04_video_vda_small_temporal_2x.json) for Video Depth Anything. During processing, follow ComfyUI progress and console stage output; cancel through ComfyUI. Easy reports an advisory storage estimate before guides run. Bounded mode limits native windows; the complete ComfyUI IMAGE input and output remain in memory. See [processing modes](#processing-modes) before trying longer clips.
+
 <p align="center">
   <img src="docs/images/icon.png" width="180" alt="Experimental DLSS Neural Rendering project icon">
 </p>
@@ -110,7 +124,7 @@ See [Runtime sources and legal notes](docs/RUNTIME_SOURCES.md) before installati
 
 ReShade, game-specific injectors, DLSS override utilities, and Nexus mods are not dependencies of this extension. Do not download a DLL merely because its filename matches: provenance, version compatibility, licensing, and integrity still matter.
 
-## One-time setup
+## Detailed and repeatable setup
 
 ### Recommended: ComfyUI Manager + one-click runtime setup
 
@@ -152,7 +166,7 @@ Keep the extracted directory. The extension records the path to its isolated Vap
 
 The repository already contains the exact `nvngx_dlss.dll`, `nvngx_dlssnr.dll`, `nvngx_dlssg.dll`, `vsdlssnr.dll`, and `vsdlsssr.dll` used by the tested setup. Use the optional `-NeuralRuntimeDll` or `-SRRuntimeDll` arguments only when intentionally overriding a bundled runtime.
 
-### 4. Run setup once
+### 4. Run setup
 
 ```powershell
 .\setup.ps1 `
@@ -165,7 +179,9 @@ The script validates the VapourKit Python/runtime files, uses the bundled wrappe
 
 The bridge requests VapourKit's caller-check compatibility option; this repository does not patch the proprietary runtime. Review the licenses and terms for every bundled component before enabling or redistributing it.
 
-Restart ComfyUI after setup. Add **DLSS 5 Runtime Status** and confirm that every path reports `READY`.
+Setup can be re-run: it accepts an existing junction to this repository or an installation already in `custom_nodes`, preserves custom JSON settings, and refuses a conflicting destination. UTF-8 configuration with or without a BOM is accepted. Malformed or non-object JSON is reported rather than overwritten. Keep the original configuration when resolving an error.
+
+Restart ComfyUI after setup. Add **DLSS 5 Runtime Status** and check file presence, interpreter/import probes and plugin loads. `Preflight: PASS` leaves `Inference: UNTESTED` until you actually process an image; status never certifies image quality. Easy performs preflight for the selected SR/NR stages before loading guide models.
 
 ## Easiest path: one node
 
@@ -178,7 +194,7 @@ Add **Experimental DLSS — Easy Upscale & Render**, connect an `IMAGE` batch, a
 
 `Auto (recommended)` selects still mode for one frame, the quality-video preset for up to 96 frames, and the memory-efficient long-video preset above that threshold.
 
-Choose `Upscale only`, `Neural rendering only`, or `Upscale + neural rendering`. The node automatically estimates and temporally stabilizes depth and creates current-to-previous motion guides, then runs only the selected stages. `Neutral / faithful` is the safest evaluation look. The Easy node favors practical defaults; use the standalone or Advanced nodes when you have engine-authored depth/motion or need exact controls.
+Choose `Upscale only`, `Neural rendering only`, or `Upscale + neural rendering`. Easy always estimates depth with Depth Anything V2 Small (DA-V2), stabilizes it for sequences, and creates current-to-previous motion guides, then runs only the selected stages. It does not switch to Video Depth Anything (VDA); use workflow 04 for that separate temporal model. `Neutral / faithful` is the safest evaluation look. Use the standalone or Advanced nodes when you have engine-authored depth/motion or need exact controls.
 
 Bounded presets apply to all three operations. They limit native processing windows; guide estimation and the complete ComfyUI IMAGE input and output still reside in memory. The runtime report shows the resolved Auto scenario, execution mode, active settings, frame counts, and input/output dimensions. Scale and quality apply to upscaling; look and effect strength apply to neural rendering.
 
@@ -286,7 +302,7 @@ Measured mean absolute pixel differences:
 
 These values measure how many pixels changed, not whether the change is better. Judge faces, thin edges, reflections, and distant detail in the full-resolution files. Pixel-estimated depth and zero motion for a still cannot reproduce the native buffers available inside a game engine.
 
-## Quick start: still image
+## Advanced still-image path
 
 Import [`workflows/01_still_image_guided_2x.json`](workflows/01_still_image_guided_2x.json).
 
@@ -302,7 +318,7 @@ For a single still, the neural runtime uses a duplicated initialization frame in
 
 Import [`workflows/04_video_vda_small_temporal_2x.json`](workflows/04_video_vda_small_temporal_2x.json) for the recommended temporally consistent depth path. Workflow 02 remains the lighter framewise fallback.
 
-Recommended guide chain:
+Workflow 04 uses VDA-S depth plus RAFT motion directly. The framewise fallback in workflows 02 and 03 uses this guide chain:
 
 ```text
 Video frames
@@ -348,6 +364,14 @@ history_overlap: 8
 `chunk_size` is the base frame count / stride between window starts. Each native window contains up to `chunk_size + history_overlap` frames, so these settings allow 16 frames per window. Final windows are shorter. The merged output retains chronological order and the original frame count.
 
 Larger chunks reduce overhead. More overlap gives a new native context more time to settle, at the cost of repeated work. Only native windows are bounded: the complete ComfyUI IMAGE input and output remain in memory.
+
+### Progress, cancellation and storage advice
+
+ComfyUI progress advances through guide work, pipeline windows and native SR/NR frames. Optional VDA and FlashDepth report stage boundaries; a model download or one model call can take time between updates. The bars describe work completed, not a reliable time estimate.
+
+Cancel using ComfyUI's interrupt control. SR/NR bridge subprocesses are polled during native work, terminated on cancellation (killed if they do not exit), and waited for before temporary files are cleaned up. Guide loops check cancellation between units of work; VDA and FlashDepth check at stage boundaries, so their active model call may need to finish first. SR/NR timeout remains disabled by default.
+
+Before guide inference, Easy prints `Storage advice` and includes it in `runtime_report`: float32 array payloads, peak native temporary payloads and available temporary-disk space. This is an advisory estimate, excluding extra working copies, model weights and file/log overhead; it is not a full VRAM prediction or a guarantee that the job fits. A disk warning does not change your preset. Use a shorter clip, lower scale/resolution, or bounded mode if needed.
 
 ## Node reference
 
@@ -396,7 +420,7 @@ Warps the previous stabilized depth into the current frame with RAFT motion, the
 
 ### Runtime Status
 
-Reports resolved Python, wrapper, and runtime paths. Redact personal directory names before posting it publicly.
+Reports resolved files, Python execution, VapourSynth/NumPy imports and SR/NR plugin-load probes in separate stages. `PRESENT` is file presence; `PASS` is a successful probe; `Inference: UNTESTED` means no GPU inference was performed. Re-queue the node after fixing configuration to refresh the displayed report. Redact personal directory names before posting it publicly.
 
 ### NVIDIA DLSS Frame Generation (External Worker)
 
@@ -426,6 +450,22 @@ Weights are cached by Hugging Face and PyTorch. Review their model cards and lic
 Native bridge arrays may be very large. Put `TempDirectory` on a fast SSD with ample free space. An OS crash may leave temporary files behind.
 
 ComfyUI video outputs can embed the complete workflow and prompt as media metadata. This may expose local filenames, model names, settings, or paths. Inspect metadata before publishing generated media.
+
+Keep AI disclosures and source attributions with shared examples; see [asset provenance](docs/ASSET_PROVENANCE.md). An absent watermark does not establish human authorship.
+
+## Regression checks
+
+Run `python -m pytest -q -p no:cacheprovider tests` with the development Python. The usability suite validates local documentation links, all seven bundled workflow graphs and saved widget values, PowerShell syntax, and synthetic Easy journeys through preflight, guide handling, native bridge files, persistent/bounded routing and reports. Model and native-stage fakes do not download weights or verify rendering quality. Workflow checks validate the shipped VHS contracts without installing or executing Video Helper Suite.
+
+For an opt-in real SR/NR smoke test on an already configured Windows GPU machine:
+
+```powershell
+$env:DLSS5_RUN_SR_NR_INTEGRATION = "1"
+python -m pytest -q -p no:cacheprovider tests/test_usability.py -k real_sr_nr_smoke
+Remove-Item Env:DLSS5_RUN_SR_NR_INTEGRATION
+```
+
+This sends two 128x128 synthetic frames and explicit guides through each native stage, without model downloads or runtime installation. It checks shape and finite output, not visual quality or temporal stability. The fixture uses the dimensions of the existing native regression baseline; a 64x64 NR probe failed locally with a GPU readback/device error, so arbitrary tiny dimensions are not validated. Without the opt-in flag these tests are skipped; a configured-runtime failure with the flag set fails the test.
 
 ## Troubleshooting
 

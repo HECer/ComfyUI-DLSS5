@@ -10,7 +10,7 @@ For the simplest installation:
 
 1. Queue **DLSS Runtime Setup (One Click)** with `Check location` to display this directory.
 2. Select `Install verified VapourKit`, enable its confirmation control, and queue the setup node again. This installs the SR/NR base runtime: bundled wrappers, verified NVIDIA SR/NR runtimes, and VapourKit's Python with NumPy. Existing working NumPy versions and custom configuration are preserved.
-3. Restart ComfyUI and check the Runtime Status node.
+3. Restart ComfyUI and run **DLSS 5 Runtime Status**. Files should be `PRESENT`; Python, VapourSynth/NumPy imports and SR/NR plugin loads should report `PASS`. `Inference: UNTESTED` is expected even when preflight passes; test an image next using the [Easy first-run guide](../README.md#first-run-install-check-make-an-image).
 4. For optional Frame Generation, select `Install verified Frame Generation`, enable confirmation, and queue the setup node. This separately verifies the FG runtime and downloads the pinned worker.
 
 The base installer verifies the SR/NR runtime hashes, downloads the pinned
@@ -18,6 +18,10 @@ VapourKit nightly when needed, checks its isolated NumPy dependency, and writes
 `config.json`. It does not require or download Frame Generation components.
 Downloaded and extracted runtime files remain ignored by Git and the Registry
 package.
+
+Setup can be re-run without discarding custom configuration or replacing a correct junction. Configuration accepts UTF-8 with or without a BOM; malformed or non-object JSON fails before overwrite. The automatic installer configures its own isolated VapourKit; it does not repair an external interpreter. For manual setup and dependency failures, see [Troubleshooting](../docs/TROUBLESHOOTING.md).
+
+Re-queue Runtime Status after repairs to refresh the staged diagnostics. Easy runs preflight for the selected SR/NR stages before guide-model work; file presence or a plugin-load pass alone does not certify GPU inference or image quality. Progress, cancellation and advisory storage limits are described in the [processing guide](../README.md#progress-cancellation-and-storage-advice).
 
 The five runtime DLLs listed above are intentionally tracked project assets.
 Never add other NVIDIA DLLs, patched DLLs, executables, API keys, or

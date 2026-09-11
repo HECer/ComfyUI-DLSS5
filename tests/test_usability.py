@@ -4,6 +4,7 @@ import importlib.util
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import stat
@@ -24,6 +25,194 @@ def _load_module(name: str, path: Path):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def test_first_run_readme_starts_with_executable_easy_journey():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    intro = readme.split("## What this extension does")[0]
+    steps = ["ComfyUI Manager", "Install verified VapourKit", "DLSS 5 Runtime Status",
+             "workflows/00_easy_one_node_2x.json", "Load Image", "Queue", "Save Image"]
+    assert all(step in intro for step in steps)
+    positions = [intro.index(step) for step in steps]
+    assert positions == sorted(positions)
+    assert "Inference: UNTESTED" in intro
+    assert "Depth Anything V2 Small" in intro
+    assert "first use" in intro
+    assert "optional Frame Generation" in intro
+    assert "2x" in intro
+
+
+def test_first_run_docs_describe_final_behavior_and_preserve_disclosures():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    troubleshooting = (ROOT / "docs/TROUBLESHOOTING.md").read_text(encoding="utf-8")
+    workflows = (ROOT / "workflows/README.md").read_text(encoding="utf-8")
+    runtime = (ROOT / "runtime/README.md").read_text(encoding="utf-8")
+    for text in (readme, troubleshooting, runtime):
+        assert "Inference: UNTESTED" in text
+        assert "Install verified Frame Generation" in text
+        assert "custom" in text.lower() and "preserv" in text.lower()
+    for text in (readme, troubleshooting, workflows):
+        assert "Depth Anything V2 Small" in text and "VDA" in text
+        assert "complete ComfyUI IMAGE input and output" in text
+        assert "cancel" in text.lower() and "progress" in text.lower()
+    assert "estimate" in troubleshooting.lower() and "VRAM" in troubleshooting
+    assert "every path reports `READY`" not in readme
+    assert "ASSET_PROVENANCE.md" in readme
+    assert "not a universal quality guarantee" in readme
+    assert "not whether the change is better" in readme
+
+
+def test_first_run_all_local_documentation_links_resolve():
+    from urllib.parse import unquote, urlsplit
+
+    docs = [*ROOT.glob("*.md"), *ROOT.joinpath("docs").rglob("*.md"),
+            ROOT / "workflows/README.md", ROOT / "runtime/README.md"]
+    checked = 0
+    for doc in docs:
+        content = doc.read_text(encoding="utf-8")
+        links = re.findall(r"\]\(([^\s)]+)(?:\s+\"[^\"]*\")?\)", content)
+        links += re.findall(r"(?:src|href)=[\"']([^\"']+)[\"']", content)
+        links += re.findall(r"^\s*\[[^\]]+\]:\s*(\S+)", content, re.MULTILINE)
+        for link in links:
+            target = urlsplit(link.strip("<>"))
+            if target.scheme or target.netloc:
+                continue
+            path = doc.parent / unquote(target.path) if target.path else doc
+            assert path.exists(), f"{doc.relative_to(ROOT)}: missing {link}"
+            if target.fragment and path.suffix == ".md":
+                headings = re.findall(r"^#{1,6}\s+(.+)$", path.read_text(encoding="utf-8"), re.MULTILINE)
+                anchors = [re.sub(r"[^\w\- ]", "", heading.lower()).replace(" ", "-") for heading in headings]
+                assert unquote(target.fragment) in anchors, f"{doc}: missing anchor {link}"
+            checked += 1
+    assert checked > 30
+
+
+@pytest.mark.parametrize("operation,stages", [
+    ("Upscale only", ("sr",)), ("Neural rendering only", ("nr",)),
+    ("Upscale + neural rendering", ("sr", "nr")),
+])
+@pytest.mark.parametrize("scenario,count,stride,overlap,flow_model", [
+    ("Auto (recommended)", 1, 1, 0, "Optical Flow (fastest)"),
+    ("Short video / best quality", 25, 25, 0, "RAFT Large (best)"),
+    ("Long video / memory efficient", 25, 16, 8, "RAFT Small (fast)"),
+    ("Fast preview", 25, 8, 2, "Optical Flow (fastest)"),
+])
+def test_integration_regression_easy_journey(monkeypatch, diagnostic_runtime, comfy_progress,
+                                            operation, stages, scenario, count, stride, overlap, flow_model):
+    import numpy as np
+
+    runtime, config = diagnostic_runtime
+    commands = _diagnostic_probes(monkeypatch)
+    monkeypatch.setattr(nodes, "_runtime_temp_dir", lambda: runtime)
+    events, native_calls = [], []
+    image = torch.arange(count, dtype=torch.float32).view(-1, 1, 1, 1).expand(-1, 8, 12, 3) / count
+
+    def depth(_self, frames, model, temporal, chunk):
+        assert any("import numpy" in command[2] for command in commands)
+        for stage in stages:
+            assert any(config[stage + "_plugin"] in command for command in commands)
+        assert (model, temporal, chunk) == ("Small (recommended)", True, 4)
+        events.append("depth")
+        return (torch.full_like(frames, 0.25),)
+
+    def flow(_self, frames, *args):
+        expected = (0.5, 5, 21) if flow_model.startswith("Optical") else (flow_model, 2 if stride == count else 4)
+        assert args == expected
+        events.append("motion")
+        return (torch.full_like(frames, 0.5),)
+
+    def native(command, **kwargs):
+        assert events[:2] == ["depth", "motion"]
+        stage = "sr" if Path(command[1]).name == "sr_bridge_runner.py" else "nr"
+        source = np.load(command[2])
+        guide = np.load(command[command.index("--depth") + 1])
+        motion = np.load(command[command.index("--mvec") + 1])
+        assert guide.shape == source.shape[:3]
+        assert motion.shape == (*source.shape[:3], 2)
+        np.testing.assert_allclose(guide, 0.25)
+        np.testing.assert_allclose(motion, 0)
+        native_calls.append((stage, np.rint(source[:, 0, 0, 0] * count).astype(int).tolist()))
+        if stage == "sr":
+            assert command[command.index("--scale") + 1] == "2"
+            assert command[command.index("--quality") + 1] == "2"
+            source = source.repeat(2, axis=1).repeat(2, axis=2)
+        else:
+            settings = json.loads(command[command.index("--settings") + 1])
+            assert settings["style"] == 0 and settings["intensity"] == 0.85
+            assert settings["auto_mask"] and settings["depth_inverted"]
+        np.save(command[3], source)
+        return subprocess.CompletedProcess(command, 0, "synthetic stage", "")
+
+    monkeypatch.setattr(nodes.DLSS5DepthAnythingV2, "estimate", depth)
+    monkeypatch.setattr(nodes.DLSS5RAFTFlow, "estimate", flow)
+    monkeypatch.setattr(nodes.DLSS5OpticalFlow, "estimate", flow)
+    monkeypatch.setattr(nodes, "_run_process", native)
+    workflow = json.loads((ROOT / "workflows/00_easy_one_node_2x.json").read_text(encoding="utf-8"))
+    saved = next(node for node in workflow["nodes"] if node["type"] == "DLSS5EasyPipeline")
+    cls = nodes.NODE_CLASS_MAPPINGS[saved["type"]]
+    widget_names = list(cls.INPUT_TYPES()["required"])[1:]
+    args = dict(zip(widget_names, saved["widgets_values"]))
+    args.update(scenario=scenario, operation=operation)
+    output, report = getattr(cls(), cls.FUNCTION)(image, **args)
+    assert cls.RETURN_TYPES == ("IMAGE", "STRING") and isinstance(report, str)
+    factor = 2 if "sr" in stages else 1
+    torch.testing.assert_close(output, image.repeat_interleave(factor, 1).repeat_interleave(factor, 2))
+    expected_calls = [(stage, list(range(start, min(count, start + stride + overlap))))
+                      for start in range(0, count, stride) for stage in stages]
+    assert native_calls == expected_calls
+    for unused in {"sr", "nr"} - set(stages):
+        assert not any(config[unused + "_plugin"] in command for command in commands)
+    assert f"operation={operation}" in report and f"guide={flow_model}" in report
+    assert "depth=Depth Anything V2 Small" in report and "Storage advice:" in report
+    assert f"output={count} frames {12 * factor}x{8 * factor}" in report
+    assert ("scale=2x; quality=Quality" in report) == ("sr" in stages)
+    assert ("look=Neutral / faithful" in report) == ("nr" in stages)
+    assert ("mode=Bounded overlap-add" in report) == bool(overlap)
+    assert all(bar.values[-1] == bar.total for bar in comfy_progress[0])
+    assert not list(runtime.glob("comfy-dlss*"))
+
+    commands.clear()
+    Path(config[stages[0] + "_plugin"]).unlink()
+    events.clear()
+    native_calls.clear()
+    with pytest.raises(RuntimeError, match="preflight failed"):
+        getattr(cls(), cls.FUNCTION)(image, **args)
+    assert events == [] and native_calls == []
+
+
+def test_integration_regression_powershell_scripts_parse():
+    shell = shutil.which("pwsh") or shutil.which("powershell")
+    if shell is None:
+        pytest.skip("PowerShell is required for the script parse gate")
+    scripts = sorted(ROOT.glob("*.ps1"))
+    assert {path.name for path in scripts} >= {"setup.ps1", "install_runtime.ps1"}
+    for path in scripts:
+        escaped = str(path).replace("'", "''")
+        result = subprocess.run([shell, "-NoProfile", "-Command",
+            f"$parseErrors = $null; $parseTokens = $null; "
+            f"[System.Management.Automation.Language.Parser]::ParseFile('{escaped}', [ref]$parseTokens, [ref]$parseErrors) | Out-Null; "
+            "if ($parseErrors.Count) { $parseErrors | Out-String | Write-Error; exit 1 }"],
+            capture_output=True, text=True, timeout=30)
+        assert result.returncode == 0, f"{path.name}: {result.stdout}\n{result.stderr}"
+
+
+@pytest.mark.skipif(os.environ.get("DLSS5_RUN_SR_NR_INTEGRATION") != "1",
+                    reason="opt-in Windows SR/NR runtime and GPU smoke test")
+@pytest.mark.parametrize("stage", ["sr", "nr"])
+def test_integration_regression_real_sr_nr_smoke(stage):
+    passed, diagnostic = nodes._bridge_diagnostics((stage,))
+    assert passed, diagnostic
+    image = torch.linspace(0, 1, 128).view(1, 1, 128, 1).expand(2, 128, 128, 3).clone()
+    depth, motion = torch.full_like(image, 0.25), torch.full_like(image, 0.5)
+    if stage == "sr":
+        output, report = nodes.DLSSSuperResolution().upscale(image, depth, motion, "2x", "Quality")
+    else:
+        output, report = nodes.DLSS5NeuralRendering().render(
+            image, "0 - neutral", 0.7, 0.85, 1, -1, True, True, depth=depth, motion_vectors=motion)
+    size = 256 if stage == "sr" else 128
+    assert output.shape == (2, size, size, 3)
+    assert output.dtype == torch.float32 and torch.isfinite(output).all()
+    assert "guides=depth+motion" in report
 
 
 nodes = _load_module("usability_nodes", ROOT / "nodes.py")
@@ -1230,7 +1419,7 @@ def test_node_help_effect_mask_does_not_disable_automatic_masking():
     assert "effect_mask" in tooltip
 
 
-def test_workflow_compatibility_preserves_baseline_contracts_and_groups_nodes():
+def test_integration_regression_workflow_compatibility_preserves_baseline_contracts_and_groups_nodes():
     baseline = _baseline_nodes()
     assert list(nodes.NODE_CLASS_MAPPINGS) == list(baseline.NODE_CLASS_MAPPINGS)
     assert nodes.NODE_DISPLAY_NAME_MAPPINGS == baseline.NODE_DISPLAY_NAME_MAPPINGS
@@ -1254,13 +1443,55 @@ def test_workflow_compatibility_preserves_baseline_contracts_and_groups_nodes():
         assert node_class.CATEGORY.startswith("Experimental DLSS Bridge")
 
 
-def test_workflow_compatibility_bundled_workflows_keep_node_inputs_and_widgets():
-    for workflow_path in (ROOT / "workflows").glob("*.json"):
+def test_integration_regression_workflow_compatibility_bundled_workflows_keep_node_inputs_and_widgets():
+    workflows = sorted((ROOT / "workflows").glob("*.json"))
+    assert len(workflows) == 7
+    external_outputs = {
+        "LoadImage": ["IMAGE", "MASK"], "PreviewImage": [], "SaveImage": [],
+        "VHS_LoadVideo": ["IMAGE", "INT", "AUDIO", "VHS_VIDEOINFO"],
+        "VHS_VideoCombine": ["VHS_FILENAMES"],
+    }
+    for workflow_path in workflows:
         workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
         workflow_nodes = {node["id"]: node for node in workflow["nodes"]}
+        assert len(workflow_nodes) == len(workflow["nodes"]), workflow_path
+        links = {link[0]: link for link in workflow["links"]}
+        assert len(links) == len(workflow["links"])
         for workflow_node in workflow["nodes"]:
             node_class = nodes.NODE_CLASS_MAPPINGS.get(workflow_node["type"])
+            for slot, output in enumerate(workflow_node.get("outputs", [])):
+                for link_id in output.get("links") or []:
+                    assert links[link_id][1:3] == [workflow_node["id"], slot]
+            for slot, input_ in enumerate(workflow_node.get("inputs", [])):
+                if input_.get("link") is not None:
+                    assert links[input_["link"]][3:5] == [workflow_node["id"], slot]
             if node_class is None:
+                kind = workflow_node["type"]
+                assert kind in external_outputs, f"Unknown workflow node: {kind}"
+                outputs = [output["type"] for output in workflow_node.get("outputs", [])]
+                assert outputs == external_outputs[kind][:len(outputs)]
+                values = workflow_node["widgets_values"]
+                if kind == "VHS_LoadVideo":
+                    assert set(values) == {"video", "force_rate", "force_size", "custom_width", "custom_height",
+                                           "frame_load_cap", "skip_first_frames", "select_every_nth"}
+                    assert isinstance(values["video"], str) and values["force_size"] == "Disabled"
+                    for name in ("force_rate", "custom_width", "custom_height", "frame_load_cap", "skip_first_frames"):
+                        assert isinstance(values[name], (int, float)) and values[name] >= 0
+                    assert values["select_every_nth"] >= 1
+                elif kind == "VHS_VideoCombine":
+                    assert set(values) == {"frame_rate", "loop_count", "filename_prefix", "format", "pix_fmt", "crf",
+                                           "save_metadata", "trim_to_audio", "pingpong", "save_output"}
+                    assert values["frame_rate"] > 0 and values["loop_count"] >= 0
+                    assert values["format"] == "video/h264-mp4" and values["pix_fmt"] == "yuv420p"
+                    assert 0 <= values["crf"] <= 51 and isinstance(values["filename_prefix"], str)
+                    assert all(isinstance(values[key], bool) for key in ("save_metadata", "trim_to_audio", "pingpong", "save_output"))
+                    fg = next((n for n in workflow["nodes"] if n["type"] == "DLSSFrameGeneration"), None)
+                    if fg:
+                        multiplier, input_fps = fg["widgets_values"][:2]
+                        assert values["frame_rate"] == int(multiplier[0]) * input_fps
+                else:
+                    assert len(values) == {"LoadImage": 2, "PreviewImage": 0, "SaveImage": 1}[kind]
+                    assert all(isinstance(value, str) for value in values)
                 continue
             schema = node_class.INPUT_TYPES()
             input_names = set(schema.get("required", {})) | set(schema.get("optional", {}))
@@ -1283,7 +1514,11 @@ def test_workflow_compatibility_bundled_workflows_keep_node_inputs_and_widgets()
         for link_id, source_id, source_slot, target_id, target_slot, link_type in workflow["links"]:
             source = workflow_nodes[source_id]
             target = workflow_nodes[target_id]
-            target_input = next(entry for entry in target["inputs"] if entry.get("link") == link_id)
+            target_input = target["inputs"][target_slot]
+            assert target_input["link"] == link_id
+            assert target_input["type"] == link_type
+            assert source["outputs"][source_slot]["type"] == link_type
+            assert link_id in source["outputs"][source_slot]["links"]
             source_class = nodes.NODE_CLASS_MAPPINGS.get(source["type"])
             target_class = nodes.NODE_CLASS_MAPPINGS.get(target["type"])
             if source_class is not None:

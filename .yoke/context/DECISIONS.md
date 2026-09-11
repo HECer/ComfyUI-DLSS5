@@ -20,3 +20,6 @@ route=codex-frontier (explicit project routing rule); codex implemented DLSS-5
 
 ## 2026-09-11 — DLSS-6: Progress, responsive cancellation and advisory memory estimates
 route=codex-frontier (explicit project routing rule); codex implemented DLSS-6
+
+## 2026-09-11 — DLSS-7: Concise first-run guide and integrated regression evidence
+route=codex-frontier (explicit project routing rule); codex implemented DLSS-7

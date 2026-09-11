@@ -83,8 +83,7 @@ The Frame Generation nodes use `dlssg-worker.exe` from the MIT-licensed
 [HECer/DLSSG-Stream-Worker](https://github.com/HECer/DLSSG-Stream-Worker) and the
 matching bundled `nvngx_dlssg.dll`. The worker repository contains the full
 C++ source, protocol specification, CMake build, Windows CI, and tagged releases.
-The runtime installer downloads release v0.1.0 and checks its pinned SHA-256 before
-use.
+The separate `Install verified Frame Generation` action downloads release v0.1.0 and checks its pinned SHA-256 before use. Base `Install verified VapourKit` setup only installs SR/NR support; it neither requires nor downloads the optional worker. See [runtime installation](../runtime/README.md).
 
 - Open-source worker release: <https://github.com/HECer/DLSSG-Stream-Worker/releases/tag/v0.1.0>
 - Official NVIDIA Streamline DLSS-G integration guide: <https://github.com/NVIDIA-RTX/Streamline/blob/main/docs/ProgrammingGuideDLSS_G.md>
@@ -98,7 +97,7 @@ it also recommends Hardware-accelerated GPU scheduling.
 
 - ComfyUI-VideoHelperSuite: <https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite>
 
-It supplies the video loader and encoder nodes used by workflows 02 and 03. It is not needed for still-image workflows or when another node pack supplies compatible IMAGE batches and video output.
+It supplies the video loader for workflows 02 through 06 and the encoder in workflows 02, 03 and 06. Workflows 04 and 05 end in previews; add an encoder for video export. It is not needed for still-image workflows or when another node pack supplies compatible IMAGE batches and video output.
 
 ## Not required
 
