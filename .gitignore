@@ -58,3 +58,9 @@ temp/
 graphify-out/
 .graphify_cache/
 .yoke/code-intelligence-probe.json
+
+# Local semantic indexes and supervisor state
+.serena/
+graft/
+.yoke/supervision/
+.yoke/tmp/

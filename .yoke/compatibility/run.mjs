@@ -1,0 +1,41 @@
+import {fileURLToPath} from 'node:url';
+// Real Yoke loop and gates, with an explicitly separate Codex review model.
+import {runLoopCommand} from '../tooling/yoke/dist/loop/run-command.js';
+import {makeReviewRunner,runCapturedAgent} from '../tooling/yoke/dist/loop/runner.js';
+import {readStatus} from '../tooling/yoke/dist/loop/reporter.js';
+import {workspaceFingerprint} from '../tooling/yoke/dist/workspace/fingerprint.js';
+import {execFileSync} from 'node:child_process';
+import {readFileSync,readdirSync,writeFileSync,mkdirSync} from 'node:fs';
+import {join} from 'node:path';
+const root=fileURLToPath(new URL('../../',import.meta.url));
+const reviewer=context=>{
+ const implementer=readStatus(root)?.execution?.requestedModel;
+ const model=implementer==='gpt-6-astra'?'gpt-5.6-sol':'gpt-6-astra';
+ console.log(`Independent read-only review: codex/${model}; implementation: ${implementer ?? 'see routing evidence'}`);
+ const before=workspaceFingerprint(context.targetDir);
+ const command=['proxy','python','-B','-m','pytest','-q','-p','no:cacheprovider','tests'];
+ const output=execFileSync('rtk',command,{cwd:context.targetDir,encoding:'utf8',windowsHide:true,timeout:300000});
+ if(workspaceFingerprint(context.targetDir)!==before) throw Error('Review evidence run modified source');
+ const evidence={story:context.story.id,fingerprint:before,command:'rtk '+command.join(' '),exitCode:0,output};
+ const dir=join(root,'.yoke','artifacts','independent-review');mkdirSync(dir,{recursive:true});
+ writeFileSync(join(dir,context.story.id+'-tests.json'),JSON.stringify(evidence,null,2));
+ const capture=inv=>{
+  const input=inv.input+'\n\nSupervisor execution evidence for this exact source fingerprint (tests ran outside your read-only sandbox immediately before review):\n'+JSON.stringify(evidence)+'\nReview the actual diff and test quality independently. Your sandbox cannot create pytest temporary directories; use this real test evidence, do not rerun write-requiring tests. Do not spawn other agents. Emit the exact verdict schema. Each finding MUST be an object with severity (blocking/warning/info), message, optional file/line/evidence; never a string. Your CLI was invoked explicitly with model '+model+'; use that model identifier in provenance, which the supervisor will independently verify from the provider session record. Do not assume a generic gpt-5 identity.\n';
+  const result=runCapturedAgent('codex',{...inv,input,args:[...inv.args,'--output-schema',join(root,'.yoke','compatibility','review-schema.json')]});
+  const events=result.output.split(/\r?\n/).flatMap(l=>{try{return [JSON.parse(l)]}catch{return []}});
+  const thread=events.find(e=>e.type==='thread.started')?.thread_id;
+  if(!thread) throw Error('Codex review did not report a session ID');
+  const home=process.env.CODEX_HOME || 'C:/Users/HEC_e/AppData/Roaming/orca/codex-runtime-home/home';
+  const sessions=join(home,'sessions');
+  const name=readdirSync(sessions,{recursive:true}).find(n=>typeof n==='string'&&n.endsWith(thread+'.jsonl'));
+  if(!name)throw Error('Codex review session record unavailable');
+  const records=readFileSync(join(sessions,name),'utf8').split(/\r?\n/).flatMap(l=>{try{return [JSON.parse(l)]}catch{return []}});
+  const models=[...new Set(records.filter(r=>r.type==='turn_context').map(r=>r.payload?.model).filter(Boolean))];
+  if(models.length!==1||models[0]!==model)throw Error('Recorded reviewer model does not match selected independent model: '+models.join(','));
+  result.tokens={...result.tokens,model:models[0]};
+  writeFileSync(join(dir,context.story.id+'-review.json'),JSON.stringify({thread,provider:'codex',recordedModel:models[0],output:result.output},null,2));
+  return result;
+ };
+ return makeReviewRunner('codex',15*60*1000,capture,{model,reasoningEffort:'high',nativeMultiAgent:false})(context);
+};
+process.exitCode=await runLoopCommand(root,{agent:'codex',isolate:true,parallel:1,routing:true,review:true,reviewer:'codex',reviewRunner:reviewer,maxIterations:process.argv.includes('--first')?1:7,resumeWorktree:process.argv.includes('--resume'),timeoutMinutes:25,json:true,decisionPolicy:'critical'});

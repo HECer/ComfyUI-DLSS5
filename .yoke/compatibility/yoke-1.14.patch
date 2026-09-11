@@ -1,0 +1,97 @@
+--- a/dist/workspace/fingerprint.js
++++ b/dist/workspace/fingerprint.js
+@@ -1,6 +1,6 @@
+ import { createHash } from 'node:crypto';
+ import { execFileSync } from 'node:child_process';
+-import { lstatSync, readFileSync, readdirSync, readlinkSync, realpathSync } from 'node:fs';
++import { lstatSync, openSync, readSync, closeSync, readFileSync, readdirSync, readlinkSync, realpathSync } from 'node:fs';
+ import { isAbsolute, join, relative, resolve } from 'node:path';
+ /** Content identity, including new files. Symlinks are identified, never followed. */
+ export function workspaceFingerprint(directory) {
+@@ -52,9 +52,14 @@
+             if (stat.isSymbolicLink())
+                 hash.update(`link:${readlinkSync(full)}`);
+             else if (stat.isFile()) {
+-                if (stat.size > 64 * 1024 * 1024)
+-                    throw new Error(`File too large to fingerprint safely: ${name}`);
+-                hash.update(`file:${stat.mode}:${stat.size}:`).update(readFileSync(full));
++                hash.update(`file:${stat.mode}:${stat.size}:`);
++                const fd = openSync(full, 'r');
++                try {
++                    const block = Buffer.alloc(1024 * 1024);
++                    let bytes;
++                    while ((bytes = readSync(fd, block, 0, block.length, null)) > 0)
++                        hash.update(block.subarray(0, bytes));
++                } finally { closeSync(fd); }
+             }
+             else if (stat.isDirectory())
+                 throw new Error(`Cannot safely fingerprint a nested repository or directory entry: ${name}`);
+--- a/dist/code-intelligence/adapters/graphify.js
++++ b/dist/code-intelligence/adapters/graphify.js
+@@ -1,8 +1,8 @@
+ import { McpBackendAdapter } from './mcp.js';
+-export const GRAPHIFY_VERSION = '0.9.56';
++export const GRAPHIFY_VERSION = '0.9.55';
+ export function createGraphifyAdapter(cwd, override) {
+     return new McpBackendAdapter({
+-        name: 'graphify', version: GRAPHIFY_VERSION, cwd, command: override?.command ?? 'python', args: override?.args ?? ['-m', 'graphify.serve'], framing: 'content-length', semantic: false, documents: true,
++        name: 'graphify', version: GRAPHIFY_VERSION, cwd, command: override?.command ?? 'python', args: override?.args ?? ['-m', 'graphify.serve'], framing: 'line', semantic: false, documents: true,
+         aliases: { context: 'query_graph', symbol: 'get_node', neighbors: 'get_neighbors', trace: 'shortest_path', impact: 'get_pr_impact' },
+     });
+ }
+--- a/dist/code-intelligence/adapters/serena.js
++++ b/dist/code-intelligence/adapters/serena.js
+@@ -2,7 +2,7 @@
+ export const SERENA_VERSION = '1.7.1-dev';
+ export function createSerenaAdapter(cwd, override) {
+     return new McpBackendAdapter({
+-        name: 'serena-lsp', version: SERENA_VERSION, cwd, command: override?.command ?? 'serena', args: override?.args ?? ['start-mcp-server', '--project-from-cwd', '--context', 'codex'], framing: 'content-length', semantic: true, documents: false,
++        name: 'serena-lsp', version: SERENA_VERSION, cwd, command: override?.command ?? 'serena', args: override?.args ?? ['start-mcp-server', '--project-from-cwd', '--context', 'codex'], framing: 'line', semantic: true, documents: false,
+         aliases: {
+             symbol: 'find_symbol', references: 'find_referencing_symbols', implementations: 'find_implementations', overview: 'get_symbols_overview', diagnostics: 'get_diagnostics_for_file',
+             rename: 'rename_symbol', replace_symbol_body: 'replace_symbol_body', insert_before_symbol: 'insert_before_symbol', insert_after_symbol: 'insert_after_symbol', safe_delete: 'safe_delete_symbol',
+--- a/dist/code-intelligence/adapters/mcp.js
++++ b/dist/code-intelligence/adapters/mcp.js
+@@ -2,6 +2,10 @@
+ function valueFromResult(value) {
+     if (!value || typeof value !== 'object')
+         return value;
++    // The pinned Serena server wraps JSON payloads in structuredContent.result.
++    if (value.structuredContent !== undefined && typeof value.structuredContent?.result === 'string') {
++        try { return JSON.parse(value.structuredContent.result); } catch { return value.structuredContent; }
++    }
+     if (value.structuredContent !== undefined)
+         return value.structuredContent;
+     const text = Array.isArray(value.content) ? value.content.find((item) => item?.type === 'text')?.text : undefined;
+--- a/dist/code-intelligence/mcp-server.js
++++ b/dist/code-intelligence/mcp-server.js
+@@ -11,7 +11,7 @@
+     code_edit_apply: { type: 'object', required: ['workspace_id', 'plan_id', 'expected_snapshot_id', 'idempotency_key'], properties: { workspace_id: { type: 'string' }, plan_id: { type: 'string' }, expected_snapshot_id: { type: 'string' }, idempotency_key: { type: 'string' } } },
+ };
+ function arg(name, args) { return args.find(value => value.startsWith(`--${name}=`))?.slice(name.length + 3); }
+-function summary(response) { return `status=${response.status} snapshot=${response.snapshot_id} warnings=${response.warnings.length} (full result in structuredContent)`; }
++function summary(response) { return JSON.stringify(response); }
+ export async function runCodeIntelligenceServer(argv = process.argv.slice(2)) {
+     const workspace = arg('workspace', argv) ?? process.cwd();
+     const configured = loadConfig(workspace)?.codeIntelligence;
+@@ -39,7 +39,7 @@
+             return;
+         }
+         if (message.method === 'tools/list') {
+-            send({ jsonrpc: '2.0', id: message.id, result: { tools: TOOL_DEFINITIONS.map(tool => ({ ...tool, inputSchema: INPUT_SCHEMAS[tool.name] })) } });
++            send({ jsonrpc: '2.0', id: message.id, result: { tools: TOOL_DEFINITIONS.map(tool => ({ ...tool, description: `${tool.description} Use workspace_id exactly: ${coordinator.workspace_id}.`, inputSchema: INPUT_SCHEMAS[tool.name] })) } });
+             return;
+         }
+         if (message.method === 'tools/call') {
+--- a/dist/loop/run-command.js
++++ b/dist/loop/run-command.js
+@@ -549,6 +549,9 @@
+             isolate,
+             review,
+             reporter,
++            // A plain independent review also needs a routed repair callback.
++            // The existing repair engine reruns every gate and review afterwards.
++            ...(review ? { repair: (context, request) => runner({ ...context, feedback: JSON.stringify(request) }) } : {}),
+             ...(quality ?? {}),
+             ...(quality ? { qualityEnabled: quality.qualityEnabled, qualityMetadata: quality.qualityMetadata } : {}),
+         });

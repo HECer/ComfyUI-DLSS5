@@ -53,6 +53,15 @@
       verify:
         - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
           fg_install
+    - id: bridge_numpy
+      text: The base installer probes NumPy in the selected isolated VapourSynth
+        Python with a bounded timeout, installs missing NumPy only in that
+        bridge environment, rechecks imports before writing config, and
+        preserves existing working versions and ComfyUI Torch. Tests simulate
+        success, failure and already-installed paths without network.
+      verify:
+        - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
+          bridge_numpy
   passes: false
   needs:
     - DLSS-1
@@ -71,8 +80,16 @@
       explicit FG action. Keep direct install_dlssg_worker behavior and tests.
       Simulate downloads/extraction, no network. Preserve previous optional FG
       configuration during base reinstall. Provide actionable retry for
-      incomplete extraction without deleting unknown directories.
-  assessmentFor: 467184d5b46346f953d7fda0045a586d1ee407df657ba03818b9cdba245c328d
+      incomplete extraction without deleting unknown directories. Native
+      baseline revealed the existing VapourKit Python imports VapourSynth but
+      lacks NumPy. The bridge requires both. Ensure missing NumPy is installed
+      only by explicit installer action into the isolated bridge interpreter,
+      never upgrade an existing usable version or ComfyUI environment. Use
+      bounded commands and actionable errors. Manual setup should at least
+      detect and explain missing NumPy. Pin the new dependency to the locally
+      verified NumPy 2.5.2 unless compatibility evidence requires another
+      choice.
+  assessmentFor: 74433207c0c3bc22c0eaeafd4e6d43d1eb8167143a620849d3f9c1b4105d32a5
 - id: DLSS-3
   title: Node descriptions and backward-compatible navigation
   priority: 3
@@ -113,17 +130,17 @@
       description/category/tooltip additions only. Test actual bundled workflow
       widget and link compatibility. Avoid new frontend JS dependency for
       disabling controls; clear tooltips sufficient.
-  assessmentFor: fe5b5d62734e6236244e98bd99f5b2493f2636f3df6c08e2dff7baac922b90cc
+  assessmentFor: a2b02ce99ddb7772a5b027c4ef1f87f69e0d790de80a08c26c394b37b005ab7d
 - id: DLSS-4
   title: Truthful runtime diagnostics and early preflight
   priority: 4
   acceptance:
     - id: runtime_diagnostics
-      text: Status separates missing/LFS-pointer files, Python/VapourSynth import and
-        plugin-load probes; reports actionable failures with bounded subprocess
-        timeouts, never calls file existence runtime-ready; refreshes after
-        external config change and can display results without third-party text
-        nodes.
+      text: Status separates missing/LFS-pointer files, Python/VapourSynth/NumPy
+        import and plugin-load probes; reports actionable failures with bounded
+        subprocess timeouts, never calls file existence runtime-ready; refreshes
+        after external config change and can display results without third-party
+        text nodes.
       verify:
         - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
           runtime_diagnostics
@@ -148,7 +165,7 @@
     testability: high
     reason: Existing Windows native bridge requires behavioral and workflow
       compatibility checks.
-    approach: Add bounded isolated import/LoadPlugin probes, no inference by
+    approach: "Add bounded isolated import/LoadPlugin probes, no inference by
       default. Optional appended smoke action may run a tiny synthetic sample if
       safe; report runtime inference untested unless actually run. Preserve
       original no-argument status method, append optional fields if needed.
@@ -156,8 +173,10 @@
       IS_CHANGED/fingerprint for external state, avoid caching stale
       diagnostics. Setup should report directly via Comfy UI text. Redacted
       support report preferred, detailed paths local. Tests mock probes and
-      model call order.
-  assessmentFor: 1e23760fcbaccbaf5e23a0e7f13ffbb6d79a13b8d32d9eb0d445af42a0d93f44
+      model call order. Include NumPy in bridge dependency diagnostics and Easy
+      preflight: it is required by the runner and was absent in this actual
+      configured VapourKit installation."
+  assessmentFor: faf18653bacbccc7b8666f5742bb7951b2f16b64b36ce7c8d028764336be9e0c
 - id: DLSS-5
   title: Honor bounded mode for all Easy operations
   priority: 5
@@ -197,7 +216,7 @@
       identity results align and no duplicate/drop/reorder. Maintain public
       signatures and style settings. Memory-efficient limits native windows, not
       the full Comfy IMAGE batch; describe honestly.
-  assessmentFor: a06f3d08476ad3c0610def8a8ec0cd6c579f466b15e3bdcf9c70ce977e61a75e
+  assessmentFor: 9904c10d6001df7e76e44da279ac0ce053171ad16a562ae21701bb4842f4bc1c
 - id: DLSS-6
   title: Progress, responsive cancellation and advisory memory estimates
   priority: 6
@@ -240,7 +259,7 @@
       cleanup. Emit progress in model loops and bridge per-frame protocol when
       practical. Support all operations; do not introduce arbitrary five-minute
       timeouts or automatically change quality. Keep output schema compatible.
-  assessmentFor: b79a57b1405dbcdd61b6b583b880520d30daf57cf5d40495f223bb1e4f364d09
+  assessmentFor: 5d907cd14baf9b8cb54442cdb74d2291952267993ec04eb6b1ec8d6fdd787781
 - id: DLSS-7
   title: Concise first-run guide and integrated regression evidence
   priority: 7
@@ -281,4 +300,4 @@
       smoke test if native environment permits, never claim quality verified
       from mocks. Review docs against final implementation. Run read-only
       audit-provenance on README after edits, no removal.
-  assessmentFor: 77c0a572c6cdd0a4d3654dd48aa773cf76f9b8d22323da9b68dbec880bb402cc
+  assessmentFor: ba3083d5cc51fbb73abc858c9c1ef3689477939b40c27b580c5a1ef890139e8f
