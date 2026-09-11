@@ -167,7 +167,7 @@ def test_neural_rendering_is_a_one_to_one_finisher():
 
 def test_runtime_setup_check_creates_and_reports_drop_location(monkeypatch, tmp_path):
     monkeypatch.setattr(nodes, "PACKAGE", tmp_path)
-    report = nodes.DLSS5RuntimeSetup().run("Check location", False)[0]
+    report = nodes.DLSS5RuntimeSetup().run("Check location", False)["result"][0]
     assert (tmp_path / "runtime").is_dir()
     assert (tmp_path / "runtime" / "dlssg").is_dir()
     assert "nvngx_dlssnr.dll" in report

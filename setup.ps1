@@ -101,7 +101,7 @@ function Find-VapourPython([string] $Root) {
         }
         if ($probeExitCode -eq 0) { return $candidate.FullName }
     }
-    throw "Could not find a Python interpreter with VapourSynth and NumPy below $Root. Run install_runtime.ps1 to install the pinned NumPy bridge dependency, then retry setup."
+    throw "Could not find a Python interpreter with VapourSynth and NumPy below $Root. Repair the selected interpreter in this external VapourKit environment: verify VapourSynth and run its python.exe -m pip install numpy==2.5.2 for missing NumPy, then retry setup. Alternatively, run install_runtime.ps1 to install and configure the automatic runtime; it does not repair the external environment selected by -VapourKitPath."
 }
 
 $vsPython = Find-VapourPython $vapourKit

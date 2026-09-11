@@ -11,3 +11,6 @@ Supervisor verified the retained DLSS-2 implementation after the explicit checkp
 
 ## 2026-09-11 — DLSS-3: Node descriptions and backward-compatible navigation
 route=codex-standard (explicit project routing rule); codex implemented DLSS-3
+
+## 2026-09-11 — DLSS-4: Truthful runtime diagnostics and early preflight
+route=codex-frontier (explicit project routing rule); codex implemented DLSS-4

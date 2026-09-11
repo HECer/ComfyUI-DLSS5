@@ -187,7 +187,7 @@ def _first_existing(candidates: list[Path]) -> Path | None:
     return next((path for path in candidates if path.is_file()), None)
 
 
-def _runtime_paths() -> tuple[Path, Path, Path]:
+def _runtime_paths(check_files=True) -> tuple[Path, Path, Path]:
     config = _runtime_config()
     python_value = os.environ.get("DLSS5_PYTHON") or config.get("python")
     python = Path(python_value) if python_value else None
@@ -249,19 +249,18 @@ def _runtime_paths() -> tuple[Path, Path, Path]:
             ("vsdlssnr.dll", plugin),
             ("nvngx_dlssnr.dll", snippet),
         )
-        if path is None
+        if _runtime_file_status(path) != "PRESENT"
     ]
-    if missing:
+    if check_files and missing:
         raise RuntimeError("DLSS 5 runtime missing: " + ", ".join(missing))
     return python, plugin, snippet
 
 
-def _sr_runtime_paths() -> tuple[Path, Path, Path]:
+def _sr_runtime_paths(check_files=True) -> tuple[Path, Path, Path]:
     config = _runtime_config()
     python_value = os.environ.get("DLSS5_PYTHON") or config.get("python")
-    python = _first_existing(
-        ([Path(python_value)] if python_value else [])
-        + [
+    python = Path(python_value) if python_value else _first_existing(
+        [
             PROJECT / "test-env" / "Scripts" / "python.exe",
             Path(os.sys.executable),
         ]
@@ -323,13 +322,116 @@ def _sr_runtime_paths() -> tuple[Path, Path, Path]:
             ("vsdlsssr.dll", plugin),
             ("nvngx_dlss.dll", runtime),
         )
-        if p is None
+        if _runtime_file_status(p) != "PRESENT"
     ]
-    if missing:
+    if check_files and missing:
         raise RuntimeError(
             "DLSS Super Resolution runtime missing: " + ", ".join(missing)
         )
     return python, plugin, runtime
+
+
+def _runtime_file_status(path):
+    if path is None or not path.is_file():
+        return "MISSING"
+    try:
+        with path.open("rb") as stream:
+            prefix = stream.read(128)
+    except OSError:
+        return "UNREADABLE"
+    if prefix.startswith(b"version https://git-lfs.github.com/spec/v1"):
+        return "LFS POINTER"
+    return "PRESENT"
+
+
+def _runtime_probe(python, script, *arguments):
+    try:
+        result = subprocess.run(
+            [str(python), "-c", script + "\nprint('DLSS_PROBE_OK')", *map(str, arguments)],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=10,
+        )
+    except subprocess.TimeoutExpired:
+        return False, "timed out after 10 seconds"
+    except OSError as exc:
+        return False, f"launch failed: {exc}"
+    if result.returncode:
+        detail = (result.stderr or result.stdout or "").strip()[-1000:]
+        return False, f"failed (exit {result.returncode}): {detail}"
+    if "DLSS_PROBE_OK" not in result.stdout.splitlines():
+        return False, "failed: executable did not complete the Python probe"
+    return True, "PASS"
+
+
+def _bridge_diagnostics(stages=("sr", "nr")):
+    lines = ["DLSS bridge diagnostics (local paths)", "Inference: UNTESTED (no GPU inference performed)"]
+    try:
+        paths = {
+            stage: (_sr_runtime_paths(False) if stage == "sr" else _runtime_paths(False))
+            for stage in stages
+        }
+    except RuntimeError as exc:
+        return False, "\n".join(lines + [str(exc)])
+    python = next(iter(paths.values()))[0]
+    python_state = _runtime_file_status(python)
+    lines.append(f"Python file: {python_state} ({python})")
+    files_ok = {}
+    for stage, (_, plugin, runtime) in paths.items():
+        states = [_runtime_file_status(plugin), _runtime_file_status(runtime)]
+        files_ok[stage] = all(state == "PRESENT" for state in states)
+        for label, path, state in zip(("wrapper", "runtime"), (plugin, runtime), states):
+            lines.append(f"{stage.upper()} {label} file: {state} ({path})")
+    if any("LFS POINTER" in line for line in lines):
+        lines.append("Fetch the actual binaries with git lfs pull in the extension repository.")
+    if python_state != "PRESENT" or not all(files_ok.values()):
+        lines.append("Repair missing/unreadable files or correct runtime/config.json and DLSS5 environment overrides.")
+    repair = (
+        f"Repair the selected interpreter ({python}); verify it imports vapoursynth and numpy. "
+        "For missing NumPy, run that interpreter with -m pip install numpy==2.5.2. "
+        "Alternatively use Runtime Setup > Install verified VapourKit to configure the automatic runtime; "
+        "it does not repair an external VapourKit interpreter."
+    )
+    if python_state == "PRESENT":
+        python_ok, detail = _runtime_probe(python, "import sys; print(sys.version)")
+        lines.append("Python: " + (detail if python_ok else f"FAIL: {detail}"))
+    else:
+        python_ok = False
+        lines.append("Python: FAIL: selected executable is missing or unusable")
+    imports_ok = python_ok
+    for label, module in (("VapourSynth", "vapoursynth"), ("NumPy", "numpy")):
+        if python_ok:
+            passed, detail = _runtime_probe(python, f"import {module}; print({module}.__version__)")
+            imports_ok &= passed
+            lines.append(f"{label} import: " + (detail if passed else f"FAIL: {detail}"))
+        else:
+            lines.append(f"{label} import: SKIPPED (Python failed)")
+    if not imports_ok:
+        lines.append(repair)
+    plugins_ok = True
+    loaded = []
+    for stage, (_, plugin, _) in paths.items():
+        if not imports_ok or not files_ok[stage]:
+            plugins_ok = False
+            lines.append(f"{stage.upper()} plugin load: SKIPPED (required files/imports failed)")
+            continue
+        script = "import sys; import vapoursynth as vs\n"
+        for index, name in enumerate([*loaded, stage], 1):
+            function = "Upscale" if name == "sr" else "Enhance"
+            script += f"vs.core.std.LoadPlugin(path=sys.argv[{index}])\nassert callable(vs.core.dlss{name}.{function})\n"
+        passed, detail = _runtime_probe(python, script, *(paths[name][1] for name in [*loaded, stage]))
+        plugins_ok &= passed
+        lines.append(f"{stage.upper()} plugin load: " + (detail if passed else f"FAIL: {detail}"))
+        if passed:
+            loaded.append(stage)
+        else:
+            lines.append("Check the configured wrapper, VapourSynth ABI and its dependent DLLs; reinstall the verified bridge if needed.")
+    passed = imports_ok and plugins_ok and all(files_ok.values())
+    lines.append("Preflight: " + ("PASS; inference remains untested" if passed else "FAIL"))
+    return passed, "\n".join(lines)
+
+
+def _text_result(report):
+    return {"ui": {"text": [report]}, "result": (report,)}
 
 
 def _dlssg_runtime_paths() -> tuple[Path, Path]:
@@ -735,6 +837,14 @@ class DLSS5EasyPipeline:
     CATEGORY = "Experimental DLSS Bridge"
 
     def run(self, image, scenario, operation, scale, quality, look, effect_strength):
+        stages = {
+            "Upscale only": ("sr",),
+            "Neural rendering only": ("nr",),
+            "Upscale + neural rendering": ("sr", "nr"),
+        }[operation]
+        passed, diagnostic = _bridge_diagnostics(stages)
+        if not passed:
+            raise RuntimeError("DLSS Easy preflight failed:\n" + diagnostic)
         preset = _easy_preset(scenario, int(image.shape[0]))
         depth = DLSS5DepthAnythingV2().estimate(image, "Small (recommended)", True, 4)[
             0
@@ -1250,7 +1360,7 @@ class DLSS5FlashDepth:
 
 
 class DLSS5RuntimeStatus:
-    DESCRIPTION = "Read-only readiness report for the experimental Neural Rendering and Super Resolution bridge files."
+    DESCRIPTION = "Read-only file, Python, NumPy, VapourSynth and plugin-load diagnostics. Each isolated probe has a 10-second timeout. GPU inference is not tested. Reports contain local paths."
     @classmethod
     def INPUT_TYPES(cls):
         return {"required": {}}
@@ -1258,19 +1368,14 @@ class DLSS5RuntimeStatus:
     RETURN_TYPES = ("STRING",)
     FUNCTION = "status"
     CATEGORY = "Experimental DLSS Bridge/setup"
+    OUTPUT_NODE = True
+
+    @classmethod
+    def IS_CHANGED(cls):
+        return float("nan")
 
     def status(self):
-        try:
-            nr_python, nr_plugin, nr_runtime = _runtime_paths()
-            sr_python, sr_plugin, sr_runtime = _sr_runtime_paths()
-            return (
-                f"READY\nVapourSynth Python: {nr_python}\n"
-                f"NR wrapper: {nr_plugin}\nNR runtime: {nr_runtime}\n"
-                f"SR wrapper: {sr_plugin}\nSR runtime: {sr_runtime}\n"
-                f"Shared Python: {nr_python == sr_python}",
-            )
-        except Exception as exc:
-            return (f"NOT READY\n{exc}",)
+        return _text_result(_bridge_diagnostics()[1])
 
 
 class DLSS5RuntimeSetup:
@@ -1294,6 +1399,10 @@ class DLSS5RuntimeSetup:
     OUTPUT_NODE = True
     CATEGORY = "Experimental DLSS Bridge/setup"
 
+    @classmethod
+    def IS_CHANGED(cls, action, confirm_download):
+        return float("nan")
+
     def run(self, action, confirm_download):
         runtime_dir = PACKAGE / "runtime"
         runtime_dir.mkdir(parents=True, exist_ok=True)
@@ -1303,12 +1412,13 @@ class DLSS5RuntimeSetup:
         sr_runtime = runtime_dir / "nvngx_dlss.dll"
         dlssg_runtime = frame_generation_dir / "nvngx_dlssg.dll"
         bundled_wrappers = (runtime_dir / "vsdlssnr.dll", runtime_dir / "vsdlsssr.dll")
-        wrapper_state = "READY" if all(path.is_file() for path in bundled_wrappers) else "MISSING"
+        wrapper_states = [_runtime_file_status(path) for path in bundled_wrappers]
+        wrapper_state = "PRESENT" if all(state == "PRESENT" for state in wrapper_states) else ", ".join(wrapper_states)
         if action == "Check location":
-            neural_state = "READY" if neural_runtime.is_file() else "MISSING"
-            sr_state = "READY" if sr_runtime.is_file() else "MISSING"
-            dlssg_state = "READY" if dlssg_runtime.is_file() else "MISSING"
-            return (
+            neural_state = _runtime_file_status(neural_runtime)
+            sr_state = _runtime_file_status(sr_runtime)
+            dlssg_state = _runtime_file_status(dlssg_runtime)
+            return _text_result(
                 f"Bundled NVIDIA SR runtime: {sr_state}\n{sr_runtime}\n"
                 f"Bundled NVIDIA NR runtime: {neural_state}\n{neural_runtime}\n\n"
                 f"Bundled VapourSynth wrappers: {wrapper_state}\n"
@@ -1317,17 +1427,19 @@ class DLSS5RuntimeSetup:
                 f"{frame_generation_dir}\n"
                 f"Bundled NVIDIA FG runtime: {dlssg_state}\n"
                 f"Expected runtime: {dlssg_runtime.name}; worker: dlssg-worker.exe\n\n"
-                "Then select 'Install verified VapourKit', enable confirm_download, and queue this node again.",
+                "File presence does not verify runtime operation. Run DLSS 5 Runtime Status for bounded dependency/plugin probes.\n"
+                "For LFS POINTER files, run git lfs pull in the extension repository.\n"
+                "To configure the automatic runtime, select 'Install verified VapourKit', enable confirm_download, and queue this node again.",
             )
         if not confirm_download:
-            return (
+            return _text_result(
                 "Download not started. Enable confirm_download after reviewing the pinned source in the README.",
             )
         from .install_runtime import install, install_frame_generation
 
         if action == "Install verified Frame Generation":
-            return (install_frame_generation(),)
-        return (install(),)
+            return _text_result(install_frame_generation())
+        return _text_result(install())
 
 
 NODE_CLASS_MAPPINGS = {

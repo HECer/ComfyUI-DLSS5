@@ -444,7 +444,8 @@ def test_fg_install_is_appended_to_setup_actions_and_cli_routes(monkeypatch):
     assert "--install-frame-generation" in script
     manual_script = (ROOT / "setup.ps1").read_text(encoding="utf-8-sig")
     assert "import vapoursynth, numpy" in manual_script
-    assert "pinned NumPy bridge dependency" in manual_script
+    assert "Repair the selected interpreter" in manual_script
+    assert "does not repair the external environment selected by -VapourKitPath" in manual_script
 
 
 def _fg_hash_fixture(monkeypatch, tmp_path, downloaded=b"verified worker fixture"):
@@ -513,12 +514,12 @@ def test_fg_install_setup_action_executes_only_after_confirmation(monkeypatch, t
     monkeypatch.setattr(action_nodes, "PACKAGE", tmp_path)
     result = action_nodes.DLSS5RuntimeSetup().run("Install verified Frame Generation", confirmed)
     if confirmed:
-        assert "Frame Generation setup complete" in result[0]
+        assert "Frame Generation setup complete" in result["result"][0]
         assert downloads == [install_runtime.DLSSG_WORKER_URL]
         assert (runtime / "dlssg" / "dlssg-worker.exe").read_bytes() == b"verified worker fixture"
         assert json.loads(config.read_text(encoding="utf-8"))["custom"] == "kept"
     else:
-        assert "Download not started" in result[0]
+        assert "Download not started" in result["result"][0]
         assert downloads == []
         assert config.read_bytes() == original
         assert not (runtime / "dlssg" / "dlssg-worker.exe").exists()
@@ -552,7 +553,8 @@ def test_bridge_numpy_manual_probe_handles_native_stderr_and_tries_next(tmp_path
         assert written["custom"] == "preserve"
     else:
         assert result.returncode != 0
-        assert "pinned NumPy bridge dependency" in result.stderr
+        assert "selected interpreter" in result.stderr
+        assert "does not repair" in result.stderr
         assert config.read_bytes() == prior
         assert not (comfy / "custom_nodes" / "ComfyUI-DLSS5").exists()
 
@@ -846,3 +848,218 @@ def test_workflow_compatibility_bundled_workflows_keep_node_inputs_and_widgets()
                     if target_input["name"] in fields
                 )
                 assert expected_type == link_type
+
+
+@pytest.fixture
+def diagnostic_runtime(monkeypatch, tmp_path):
+    monkeypatch.setattr(nodes, 'PACKAGE', tmp_path)
+    monkeypatch.setattr(nodes, 'PROJECT', tmp_path / 'parent')
+    for key in list(os.environ):
+        if key.startswith('DLSS5_'):
+            monkeypatch.delenv(key)
+    runtime = tmp_path / 'runtime'
+    runtime.mkdir()
+    config = {}
+    for key in ('python', 'sr_plugin', 'sr_runtime', 'nr_plugin', 'nr_runtime'):
+        path = runtime / (key + '.bin')
+        path.write_bytes(b'runtime fixture')
+        config[key] = str(path)
+    (runtime / 'config.json').write_text(json.dumps(config), encoding='utf-8-sig')
+    return runtime, config
+
+
+def _diagnostic_probes(monkeypatch, failure=None):
+    commands = []
+    def run(command, **kwargs):
+        commands.append(command)
+        assert 0 < kwargs['timeout'] <= 15
+        assert kwargs.get('capture_output')
+        if failure and failure in ' '.join(command):
+            return subprocess.CompletedProcess(command, 1, '', 'probe failed: ' + failure)
+        return subprocess.CompletedProcess(command, 0, 'DLSS_PROBE_OK', '')
+    monkeypatch.setattr(nodes.subprocess, 'run', run)
+    return commands
+
+
+def test_runtime_diagnostics_staged_probes_and_ui_contract(monkeypatch, diagnostic_runtime):
+    commands = _diagnostic_probes(monkeypatch)
+    result = nodes.DLSS5RuntimeStatus().status()
+    assert isinstance(result, dict)
+    report = result['result'][0]
+    assert result['ui']['text'] == [report]
+    assert nodes.DLSS5RuntimeStatus.OUTPUT_NODE is True
+    for stage in ('Python: PASS', 'VapourSynth import: PASS', 'NumPy import: PASS',
+                  'SR plugin load: PASS', 'NR plugin load: PASS', 'Inference: UNTESTED'):
+        assert stage in report
+    assert 'READY' not in report
+    assert any('import numpy' in command[2] for command in commands)
+    plugin_commands = [command for command in commands if 'LoadPlugin' in command[2]]
+    assert len(plugin_commands) == 2
+    assert all('get_frame' not in command[2] for command in commands)
+    assert diagnostic_runtime[1]['sr_plugin'] in plugin_commands[-1]
+    assert diagnostic_runtime[1]['nr_plugin'] in plugin_commands[-1]
+
+
+@pytest.mark.parametrize('failure', ['import numpy', 'import vapoursynth', 'LoadPlugin'])
+def test_runtime_diagnostics_actionable_dependency_failures(monkeypatch, diagnostic_runtime, failure):
+    commands = _diagnostic_probes(monkeypatch, failure)
+    report = nodes.DLSS5RuntimeStatus().status()['result'][0]
+    assert 'FAIL' in report
+    assert 'Inference: UNTESTED' in report
+    assert 'selected interpreter' in report if failure.startswith('import') else 'wrapper' in report
+    if failure.startswith('import'):
+        assert not any('LoadPlugin' in command[2] for command in commands)
+
+
+@pytest.mark.parametrize('failure', ['timeout', 'launch', 'crash', 'ignored_script'])
+def test_runtime_diagnostics_bounded_probe_errors(monkeypatch, diagnostic_runtime, failure):
+    def run(command, **kwargs):
+        assert 0 < kwargs['timeout'] <= 15
+        if failure == 'timeout':
+            raise subprocess.TimeoutExpired(command, kwargs['timeout'])
+        if failure == 'launch':
+            raise OSError('cannot execute')
+        if failure == 'ignored_script':
+            return subprocess.CompletedProcess(command, 0, '', '')
+        return subprocess.CompletedProcess(command, -123, '', '')
+    monkeypatch.setattr(nodes.subprocess, 'run', run)
+    report = nodes.DLSS5RuntimeStatus().status()['result'][0]
+    assert 'Python: FAIL' in report
+    assert 'timed out' in report if failure == 'timeout' else 'failed' in report.lower()
+    assert 'selected interpreter' in report
+
+
+def test_runtime_diagnostics_refreshes_config_and_reports_missing_and_lfs(monkeypatch, diagnostic_runtime):
+    runtime, config = diagnostic_runtime
+    commands = _diagnostic_probes(monkeypatch)
+    first = nodes.DLSS5RuntimeStatus.IS_CHANGED()
+    assert 'Python: PASS' in nodes.DLSS5RuntimeStatus().status()['result'][0]
+    config['python'] = str(runtime / 'missing-python.exe')
+    Path(config['nr_plugin']).write_bytes(b'version https://git-lfs.github.com/spec/v1\noid sha256:abc\n')
+    Path(config['sr_runtime']).unlink()
+    (runtime / 'config.json').write_text(json.dumps(config), encoding='utf-8-sig')
+    assert first != nodes.DLSS5RuntimeStatus.IS_CHANGED()
+    commands.clear()
+    report = nodes.DLSS5RuntimeStatus().status()['result'][0]
+    assert 'MISSING' in report and 'LFS POINTER' in report
+    assert 'git lfs pull' in report
+    assert not commands
+
+
+def test_runtime_diagnostics_invalid_config_is_displayed(monkeypatch, diagnostic_runtime):
+    (diagnostic_runtime[0] / 'config.json').write_text('{', encoding='utf-8')
+    result = nodes.DLSS5RuntimeStatus().status()
+    assert 'Invalid runtime configuration' in result['ui']['text'][0]
+    assert result['result'][0] == result['ui']['text'][0]
+
+
+def test_runtime_diagnostics_setup_reports_present_files_without_readiness(monkeypatch, diagnostic_runtime):
+    runtime, _ = diagnostic_runtime
+    for name in ('nvngx_dlss.dll', 'nvngx_dlssnr.dll', 'vsdlssnr.dll', 'vsdlsssr.dll'):
+        (runtime / name).write_bytes(b'fixture')
+    result = nodes.DLSS5RuntimeSetup().run('Check location', False)
+    assert isinstance(result, dict)
+    report = result['result'][0]
+    assert result['ui']['text'] == [report]
+    assert 'PRESENT' in report and 'READY' not in report
+    assert 'Runtime Status' in report
+    assert nodes.DLSS5RuntimeSetup.IS_CHANGED('Check location', False) != nodes.DLSS5RuntimeSetup.IS_CHANGED('Check location', False)
+
+
+@pytest.mark.parametrize('operation,stages', [
+    ('Upscale only', ('sr',)), ('Neural rendering only', ('nr',)),
+    ('Upscale + neural rendering', ('sr', 'nr')),
+])
+@pytest.mark.parametrize('failure', ['python', 'numpy', 'plugin', None])
+def test_early_preflight_only_required_stages_before_models(monkeypatch, diagnostic_runtime, operation, stages, failure):
+    runtime, config = diagnostic_runtime
+    for unused in {'sr', 'nr'} - set(stages):
+        Path(config[unused + '_plugin']).unlink()
+        Path(config[unused + '_runtime']).unlink()
+    if failure == 'python':
+        config['python'] = str(runtime / 'missing-python.exe')
+        (runtime / 'config.json').write_text(json.dumps(config), encoding='utf-8')
+    commands = _diagnostic_probes(monkeypatch, {'numpy': 'import numpy', 'plugin': 'LoadPlugin'}.get(failure))
+    work = []
+    image = nodes.torch.zeros(1, 8, 8, 3)
+    def estimate(self, *args, **kwargs):
+        work.append('model')
+        assert any('import numpy' in command[2] for command in commands)
+        for stage in stages:
+            assert any(config[stage + '_plugin'] in command for command in commands)
+        return (image,)
+    monkeypatch.setattr(nodes.DLSS5DepthAnythingV2, 'estimate', estimate)
+    monkeypatch.setattr(nodes.DLSS5OpticalFlow, 'estimate', estimate)
+    def render(self, *args, **kwargs):
+        work.append('render')
+        return image, 'rendered'
+    monkeypatch.setattr(nodes.DLSSSuperResolution, 'upscale', render)
+    monkeypatch.setattr(nodes.DLSS5NeuralRendering, 'render', render)
+    monkeypatch.setattr(nodes.DLSS5FullPipeline, 'run', render)
+    args = (image, 'Still image', operation, '2x', 'Quality', 'Neutral / faithful', 0.85)
+    if failure:
+        with pytest.raises(RuntimeError, match='preflight'):
+            nodes.DLSS5EasyPipeline().run(*args)
+        assert work == []
+    else:
+        output, report = nodes.DLSS5EasyPipeline().run(*args)
+        assert output is image and 'rendered' in report
+        assert work == ['model', 'model', 'render']
+        for unused in {'sr', 'nr'} - set(stages):
+            assert not any(config[unused + '_plugin'] in command for command in commands)
+
+
+@pytest.mark.parametrize('script,passed', [('print(123)', True), ('raise RuntimeError(123)', False)])
+def test_runtime_diagnostics_executes_isolated_probe_script(script, passed):
+    success, detail = nodes._runtime_probe(Path(sys.executable), script)
+    assert success is passed
+    assert 'PASS' in detail if passed else '123' in detail
+
+
+def test_runtime_diagnostics_text_extension_displays_and_refreshes_without_serializing():
+    assert (ROOT / 'web' / 'runtime_reports.js').is_file()
+    package_source = (ROOT / '__init__.py').read_text(encoding='utf-8')
+    assert 'WEB_DIRECTORY' in package_source and './web' in package_source
+    script = r"""
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+let extension;
+globalThis.app = { registerExtension(value) { extension = value; } };
+globalThis.document = { createElement() { return { style: {} }; } };
+const source = fs.readFileSync('web/runtime_reports.js', 'utf8').replace(/^import .*;$/m, 'const app = globalThis.app;');
+await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
+for (const name of ['DLSS5RuntimeStatus', 'DLSS5RuntimeSetup']) {
+    let originalCalls = 0;
+    class Node {
+        constructor() { this.widgets = []; this.size = [300, 100]; }
+        onExecuted() { originalCalls++; }
+        addDOMWidget(name, type, element, options) {
+            const widget = { name, type, element, options };
+            this.widgets.push(widget);
+            return widget;
+        }
+        setSize(size) { this.size = size; }
+        computeSize() { return [300, 220]; }
+        setDirtyCanvas() {}
+    }
+    extension.beforeRegisterNodeDef(Node, { name });
+    const node = new Node();
+    node.onNodeCreated?.();
+    node.onExecuted({ text: ['first result'] });
+    assert.equal(node.widgets.length, 1);
+    const widget = node.widgets[0];
+    assert.equal(widget.element.value, 'first result');
+    assert.equal(widget.element.readOnly, true);
+    assert.equal(widget.options.serialize, false);
+    node.onExecuted({ text: ['updated result', 'line two'] });
+    assert.equal(node.widgets.length, 1);
+    assert.equal(widget.element.value, 'updated result\nline two');
+    assert.equal(originalCalls, 2);
+}
+class Unrelated {}
+extension.beforeRegisterNodeDef(Unrelated, { name: 'OtherNode' });
+assert.equal(Unrelated.prototype.onExecuted, undefined);
+"""
+    result = subprocess.run(['node', '--input-type=module', '-e', script], cwd=ROOT,
+                            capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr

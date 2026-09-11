@@ -152,7 +152,7 @@
       verify:
         - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
           early_preflight
-  passes: false
+  passes: true
   needs:
     - DLSS-3
   area: dlss-usability
