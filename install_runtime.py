@@ -35,6 +35,27 @@ RUNTIME = PACKAGE / "runtime"
 BUNDLED_PLUGINS = ("vsdlssnr.dll", "vsdlsssr.dll")
 
 
+def load_runtime_config(path: Path) -> dict:
+    if not path.is_file():
+        return {}
+    try:
+        config = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError) as exc:
+        raise RuntimeError(f"Invalid runtime configuration at {path}: {exc}") from exc
+    if not isinstance(config, dict):
+        raise RuntimeError(f"Invalid runtime configuration at {path}: expected a JSON object")
+    return config
+
+
+def write_runtime_config(path: Path, config: dict) -> None:
+    temporary = path.with_name(path.name + ".tmp")
+    try:
+        temporary.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -181,6 +202,8 @@ def install() -> str:
             "py7zr is missing. Install/update this node through ComfyUI Manager first."
         ) from exc
 
+    config_path = RUNTIME / "config.json"
+    config = load_runtime_config(config_path)
     RUNTIME.mkdir(parents=True, exist_ok=True)
     dlssg_dir = RUNTIME / "dlssg"
     dlssg_dir.mkdir(exist_ok=True)
@@ -233,15 +256,13 @@ def install() -> str:
     # the SR wrapper uses its module directory as the NGX search path.
     nr_plugin, sr_plugin = stage_bundled_plugins(RUNTIME)
     python = find_vapour_python(extracted)
-    config = {
+    config.update({
         "python": str(python.resolve()),
         "nr_plugin": str(nr_plugin.resolve()),
         "nr_runtime": str(neural_runtime.resolve()),
         "nvidia_dlssnr_sha256": neural_runtime_hash,
         "sr_plugin": str(sr_plugin.resolve()),
         "sr_runtime": str(sr_runtime.resolve()),
-        "temp_dir": str((RUNTIME / "temp").resolve()),
-        "timeout_seconds": 0,
         "vapourkit_release": RELEASE,
         "vapourkit_archive_sha256": SHA256,
         "nvidia_dlss_release": NVIDIA_DLSS_RELEASE,
@@ -251,11 +272,11 @@ def install() -> str:
         "dlssg_worker": str(dlssg_worker.resolve()),
         "dlssg_worker_release": DLSSG_WORKER_RELEASE,
         "dlssg_worker_sha256": DLSSG_WORKER_SHA256,
-    }
+    })
+    config.setdefault("temp_dir", str((RUNTIME / "temp").resolve()))
+    config.setdefault("timeout_seconds", 0)
     Path(config["temp_dir"]).mkdir(exist_ok=True)
-    (RUNTIME / "config.json").write_text(
-        json.dumps(config, indent=2) + "\n", encoding="utf-8"
-    )
+    write_runtime_config(config_path, config)
     return (
         "Runtime setup complete. Restart ComfyUI, then run DLSS 5 Runtime Status.\n"
         f"Configuration: {RUNTIME / 'config.json'}\n"

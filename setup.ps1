@@ -12,7 +12,51 @@ $repo = $PSScriptRoot
 $comfy = (Resolve-Path -LiteralPath $ComfyUIPath).Path
 $vapourKit = (Resolve-Path -LiteralPath $VapourKitPath).Path
 $runtimeDir = Join-Path $repo "runtime"
-New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
+$configPath = Join-Path $runtimeDir "config.json"
+
+$customNodes = Join-Path $comfy "custom_nodes"
+$repoParent = Split-Path $repo -Parent
+$createJunction = $false
+if ([IO.Path]::GetFileName($repoParent) -ieq "custom_nodes") {
+    $installPath = $repo
+} else {
+    $installPath = Join-Path $customNodes "ComfyUI-DLSS5"
+    if (Test-Path -LiteralPath $installPath) {
+        $existing = Get-Item -LiteralPath $installPath -Force
+        $target = @($existing.Target)[0]
+        if (-not $target -or -not [IO.Path]::IsPathRooted($target)) {
+            $target = Join-Path (Split-Path $installPath -Parent) $target
+        }
+        if (
+            $existing.LinkType -ne "Junction" -or
+            [IO.Path]::GetFullPath($target) -ine [IO.Path]::GetFullPath($repo)
+        ) {
+            throw "$installPath already exists and does not target $repo. Remove or rename it, then run setup again."
+        }
+    } else {
+        $createJunction = $true
+    }
+}
+
+$existingConfig = [ordered]@{}
+if (Test-Path -LiteralPath $configPath -PathType Leaf) {
+    try {
+        $configJson = Get-Content -LiteralPath $configPath -Raw -Encoding UTF8
+        $parsedConfig = ConvertFrom-Json -InputObject $configJson
+    } catch {
+        throw "Invalid runtime configuration at ${configPath}: $($_.Exception.Message)"
+    }
+    if (
+        -not $configJson.TrimStart().StartsWith("{") -or
+        $null -eq $parsedConfig -or
+        $parsedConfig.GetType().FullName -ne "System.Management.Automation.PSCustomObject"
+    ) {
+        throw "Invalid runtime configuration at ${configPath}: expected a JSON object"
+    }
+    foreach ($property in $parsedConfig.PSObject.Properties) {
+        $existingConfig[$property.Name] = $property.Value
+    }
+}
 
 if ($NeuralRuntimeDll) {
     $nrRuntime = (Resolve-Path -LiteralPath $NeuralRuntimeDll).Path
@@ -78,37 +122,59 @@ function Copy-If-Different([string] $Source, [string] $Destination) {
         Copy-Item -LiteralPath $Source -Destination $Destination -Force
     }
 }
+New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
 Copy-If-Different $nrRuntime (Join-Path $runtimeDir "nvngx_dlssnr.dll")
 Copy-If-Different $srRuntime (Join-Path $runtimeDir "nvngx_dlss.dll")
 
+if (-not $TempDirectory -and $existingConfig.Contains("temp_dir")) {
+    $TempDirectory = [string] $existingConfig["temp_dir"]
+}
 if (-not $TempDirectory) {
     $TempDirectory = Join-Path ([IO.Path]::GetTempPath()) "comfyui-dlss5"
 }
 New-Item -ItemType Directory -Force -Path $TempDirectory | Out-Null
 
-$config = [ordered]@{
-    python = $vsPython
-    nr_plugin = (Join-Path $runtimeDir "vsdlssnr.dll")
-    nr_runtime = (Join-Path $runtimeDir "nvngx_dlssnr.dll")
-    sr_plugin = (Join-Path $runtimeDir "vsdlsssr.dll")
-    sr_runtime = (Join-Path $runtimeDir "nvngx_dlss.dll")
-    dlssg_runtime = (Join-Path $runtimeDir "dlssg\nvngx_dlssg.dll")
-    temp_dir = (Resolve-Path -LiteralPath $TempDirectory).Path
-    timeout_seconds = 0
+$config = $existingConfig
+$config["python"] = $vsPython
+$config["nr_plugin"] = Join-Path $runtimeDir "vsdlssnr.dll"
+$config["nr_runtime"] = Join-Path $runtimeDir "nvngx_dlssnr.dll"
+$config["sr_plugin"] = Join-Path $runtimeDir "vsdlsssr.dll"
+$config["sr_runtime"] = Join-Path $runtimeDir "nvngx_dlss.dll"
+$config["dlssg_runtime"] = Join-Path $runtimeDir "dlssg\nvngx_dlssg.dll"
+$config["temp_dir"] = (Resolve-Path -LiteralPath $TempDirectory).Path
+if (-not $config.Contains("timeout_seconds")) {
+    $config["timeout_seconds"] = 0
 }
-$config | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $runtimeDir "config.json") -Encoding utf8
 
-$customNodes = Join-Path $comfy "custom_nodes"
-New-Item -ItemType Directory -Force -Path $customNodes | Out-Null
-$repoParent = Split-Path $repo -Parent
-if ([IO.Path]::GetFileName($repoParent) -ieq "custom_nodes") {
-    $installPath = $repo
-} else {
-    $installPath = Join-Path $customNodes "ComfyUI-DLSS5"
-    if (Test-Path -LiteralPath $installPath) {
-        throw "$installPath already exists. Remove or rename it, then run setup again."
+$configWriteId = [Guid]::NewGuid().ToString("N")
+$temporaryConfig = "$configPath.$configWriteId.tmp"
+$backupConfig = "$configPath.$configWriteId.bak"
+$junctionCreated = $false
+try {
+    $json = $config | ConvertTo-Json -Depth 100
+    [IO.File]::WriteAllText($temporaryConfig, $json + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+    New-Item -ItemType Directory -Force -Path $customNodes | Out-Null
+    if ($createJunction) {
+        New-Item -ItemType Junction -Path $installPath -Target $repo | Out-Null
+        $junctionCreated = $true
     }
-    New-Item -ItemType Junction -Path $installPath -Target $repo | Out-Null
+    if (Test-Path -LiteralPath $configPath -PathType Leaf) {
+        [IO.File]::Replace($temporaryConfig, $configPath, $backupConfig)
+    } else {
+        [IO.File]::Move($temporaryConfig, $configPath)
+    }
+} catch {
+    if ($junctionCreated) {
+        [IO.Directory]::Delete($installPath)
+    }
+    throw
+} finally {
+    if (Test-Path -LiteralPath $temporaryConfig -PathType Leaf) {
+        Remove-Item -LiteralPath $temporaryConfig -Force
+    }
+}
+if (Test-Path -LiteralPath $backupConfig -PathType Leaf) {
+    Remove-Item -LiteralPath $backupConfig -Force
 }
 
 Write-Host ""

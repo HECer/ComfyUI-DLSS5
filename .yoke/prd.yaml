@@ -1,8 +1,6 @@
 - id: DLSS-1
   title: Repeatable setup and configuration preservation
   priority: 1
-  needs: []
-  area: dlss-usability
   acceptance:
     - id: config_roundtrip
       text: Read UTF-8 with or without BOM identically; report malformed/non-object
@@ -18,6 +16,9 @@
       verify:
         - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
           setup_repeatable
+  passes: true
+  needs: []
+  area: dlss-usability
   assessment:
     taskClass: debugging
     difficulty: medium
@@ -33,14 +34,10 @@
       optional absent config behavior. Validate configuration before modifying
       files. Shared small config helpers are fine; avoid wholesale
       restructuring.
-  passes: false
   assessmentFor: b088fe97f928373b8de4a05ac29e10a6f363157ea3f96ae769d8a8f90aa6b63b
 - id: DLSS-2
   title: Separate optional Frame Generation installation
   priority: 2
-  needs:
-    - DLSS-1
-  area: dlss-usability
   acceptance:
     - id: base_install
       text: Base installer succeeds without FG runtime/worker and never downloads FG;
@@ -56,6 +53,10 @@
       verify:
         - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
           fg_install
+  passes: false
+  needs:
+    - DLSS-1
+  area: dlss-usability
   assessment:
     taskClass: implementation
     difficulty: medium
@@ -71,14 +72,10 @@
       Simulate downloads/extraction, no network. Preserve previous optional FG
       configuration during base reinstall. Provide actionable retry for
       incomplete extraction without deleting unknown directories.
-  passes: false
   assessmentFor: 467184d5b46346f953d7fda0045a586d1ee407df657ba03818b9cdba245c328d
 - id: DLSS-3
   title: Node descriptions and backward-compatible navigation
   priority: 3
-  needs:
-    - DLSS-2
-  area: dlss-usability
   acceptance:
     - id: node_help
       text: All 14 nodes expose useful descriptions and tooltips for every user-facing
@@ -96,6 +93,10 @@
       verify:
         - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
           workflow_compatibility
+  passes: false
+  needs:
+    - DLSS-2
+  area: dlss-usability
   assessment:
     taskClass: implementation
     difficulty: medium
@@ -112,14 +113,10 @@
       description/category/tooltip additions only. Test actual bundled workflow
       widget and link compatibility. Avoid new frontend JS dependency for
       disabling controls; clear tooltips sufficient.
-  passes: false
   assessmentFor: fe5b5d62734e6236244e98bd99f5b2493f2636f3df6c08e2dff7baac922b90cc
 - id: DLSS-4
   title: Truthful runtime diagnostics and early preflight
   priority: 4
-  needs:
-    - DLSS-3
-  area: dlss-usability
   acceptance:
     - id: runtime_diagnostics
       text: Status separates missing/LFS-pointer files, Python/VapourSynth import and
@@ -138,6 +135,10 @@
       verify:
         - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
           early_preflight
+  passes: false
+  needs:
+    - DLSS-3
+  area: dlss-usability
   assessment:
     taskClass: debugging
     difficulty: medium
@@ -156,14 +157,10 @@
       diagnostics. Setup should report directly via Comfy UI text. Redacted
       support report preferred, detailed paths local. Tests mock probes and
       model call order.
-  passes: false
   assessmentFor: 1e23760fcbaccbaf5e23a0e7f13ffbb6d79a13b8d32d9eb0d445af42a0d93f44
 - id: DLSS-5
   title: Honor bounded mode for all Easy operations
   priority: 5
-  needs:
-    - DLSS-4
-  area: dlss-usability
   acceptance:
     - id: bounded_operations
       text: Long-video/Fast-preview Easy presets apply bounded windows to Upscale only
@@ -181,6 +178,10 @@
       verify:
         - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
           truthful_presets
+  passes: false
+  needs:
+    - DLSS-4
+  area: dlss-usability
   assessment:
     taskClass: debugging
     difficulty: medium
@@ -196,14 +197,10 @@
       identity results align and no duplicate/drop/reorder. Maintain public
       signatures and style settings. Memory-efficient limits native windows, not
       the full Comfy IMAGE batch; describe honestly.
-  passes: false
   assessmentFor: a06f3d08476ad3c0610def8a8ec0cd6c579f466b15e3bdcf9c70ce977e61a75e
 - id: DLSS-6
   title: Progress, responsive cancellation and advisory memory estimates
   priority: 6
-  needs:
-    - DLSS-5
-  area: dlss-usability
   acceptance:
     - id: progress_cancel
       text: Depth/flow/pipeline work publishes Comfy progress; long SR/NR subprocesses
@@ -222,6 +219,10 @@
       verify:
         - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
           memory_advice
+  passes: false
+  needs:
+    - DLSS-5
+  area: dlss-usability
   assessment:
     taskClass: debugging
     difficulty: medium
@@ -239,14 +240,10 @@
       cleanup. Emit progress in model loops and bridge per-frame protocol when
       practical. Support all operations; do not introduce arbitrary five-minute
       timeouts or automatically change quality. Keep output schema compatible.
-  passes: false
   assessmentFor: b79a57b1405dbcdd61b6b583b880520d30daf57cf5d40495f223bb1e4f364d09
 - id: DLSS-7
   title: Concise first-run guide and integrated regression evidence
   priority: 7
-  needs:
-    - DLSS-6
-  area: dlss-usability
   acceptance:
     - id: first_run
       text: README starts with installation, base runtime check, bundled Easy workflow
@@ -264,6 +261,10 @@
       verify:
         - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
           integration_regression
+  passes: false
+  needs:
+    - DLSS-6
+  area: dlss-usability
   assessment:
     taskClass: implementation
     difficulty: medium
@@ -280,5 +281,4 @@
       smoke test if native environment permits, never claim quality verified
       from mocks. Review docs against final implementation. Run read-only
       audit-provenance on README after edits, no removal.
-  passes: false
   assessmentFor: 77c0a572c6cdd0a4d3654dd48aa773cf76f9b8d22323da9b68dbec880bb402cc

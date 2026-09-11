@@ -168,9 +168,12 @@ def _runtime_config() -> dict:
     if not path.is_file():
         return {}
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
+        config = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError) as exc:
+        raise RuntimeError(f"Invalid runtime configuration at {path}: {exc}") from exc
+    if not isinstance(config, dict):
+        raise RuntimeError(f"Invalid runtime configuration at {path}: expected a JSON object")
+    return config
 
 
 def _runtime_timeout():
