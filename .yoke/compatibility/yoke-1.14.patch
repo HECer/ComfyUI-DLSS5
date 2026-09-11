@@ -95,3 +95,19 @@
              ...(quality ?? {}),
              ...(quality ? { qualityEnabled: quality.qualityEnabled, qualityMetadata: quality.qualityMetadata } : {}),
          });
+diff --git a/dist/quality/loop.js b/dist/quality/loop.js
+index f4e55af..e681c12 100644
+--- a/dist/quality/loop.js
++++ b/dist/quality/loop.js
+@@ -70,7 +70,10 @@ export function runQualityRepairLoop(input) {
+                     return { kind: 'blocked', reason: authorization.reason, summary: `${finding.message}${finding.evidence?.length ? `; evidence: ${finding.evidence.join(', ')}` : ''}`, repairs: usedRepairRounds };
+                 usedRepairRounds = authorization.round;
+                 emitStatus(authorization.round);
+-                const repair = input.repair({ round: authorization.round, source: 'review', finding });
++                // Keep the primary finding while passing every actionable blocker
++                // from this exact verdict to the same routed repair round.
++                const findings = review.verdict.findings.filter(candidate => candidate.severity === 'blocking' && (candidate.actionable ?? true));
++                const repair = input.repair({ round: authorization.round, source: 'review', finding, findings });
+                 if (repair.kind === 'blocked')
+                     return { kind: 'blocked', reason: 'repair-failed', summary: repair.summary, repairs: usedRepairRounds };
+                 const gates = input.rerunGates();

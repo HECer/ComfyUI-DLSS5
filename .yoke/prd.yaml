@@ -216,12 +216,19 @@
     testability: high
     reason: Existing Windows native bridge requires behavioral and workflow
       compatibility checks.
-    approach: Reuse _pipeline_windows and _overlap_add carefully. Add deterministic
+    approach: "Reuse _pipeline_windows and _overlap_add carefully. Add deterministic
       frame-index fake SR/NR tests across 1,2,17,33,96,97,100 frames and scale
       cases; do not merely assert call count. Assert bounded versus persistent
       identity results align and no duplicate/drop/reorder. Maintain public
       signatures and style settings. Memory-efficient limits native windows, not
-      the full Comfy IMAGE batch; describe honestly.
+      the full Comfy IMAGE batch; describe honestly. Update all
+      bounded-processing help after the new routing is implemented. FullPipeline
+      chunk_size is the stride/base frame count, not the entire native window:
+      _iter_overlap_windows includes chunk_size plus overlap. Describe the
+      actual maximum window correctly and make clear that the complete ComfyUI
+      IMAGE batch/output still resides in memory. Remove the temporary Easy help
+      restriction that bounded presets apply only to combined operation once
+      solo paths honor them."
   assessmentFor: 9904c10d6001df7e76e44da279ac0ce053171ad16a562ae21701bb4842f4bc1c
 - id: DLSS-6
   title: Progress, responsive cancellation and advisory memory estimates

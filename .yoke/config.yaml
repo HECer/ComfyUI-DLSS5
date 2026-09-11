@@ -101,8 +101,7 @@ routing:
     - storyId: DLSS-6
       worker: codex-frontier
     - storyId: DLSS-7
-      worker: codex-standard
-      escalateTo: codex-frontier
+      worker: codex-frontier
 completion:
   command: rtk proxy python -B -m pytest -q -p no:cacheprovider tests
   retries: 0
