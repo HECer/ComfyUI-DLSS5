@@ -17,7 +17,7 @@ app.registerExtension({
                 this.runtimeReport = this.addDOMWidget("runtime_report", "text", element, {
                     serialize: false,
                 });
-                this.setSize([this.size[0], Math.max(this.size[1], 260)]);
+                this.setSize([Math.max(this.size[0], 560), Math.max(this.size[1], 420)]);
             }
             this.runtimeReport.element.value = (message.text ?? []).join("\n");
             this.setDirtyCanvas(true, true);

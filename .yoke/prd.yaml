@@ -34,7 +34,7 @@
       optional absent config behavior. Validate configuration before modifying
       files. Shared small config helpers are fine; avoid wholesale
       restructuring.
-  assessmentFor: b088fe97f928373b8de4a05ac29e10a6f363157ea3f96ae769d8a8f90aa6b63b
+  assessmentFor: b9a6bfd82b2e00d69fbd35af112f5ccd74b86cf9f61bbb55c85e68fd45acdfbf
 - id: DLSS-2
   title: Separate optional Frame Generation installation
   priority: 2
@@ -89,7 +89,7 @@
       detect and explain missing NumPy. Pin the new dependency to the locally
       verified NumPy 2.5.2 unless compatibility evidence requires another
       choice.
-  assessmentFor: 74433207c0c3bc22c0eaeafd4e6d43d1eb8167143a620849d3f9c1b4105d32a5
+  assessmentFor: 2091c1271d86e5e8d995de2c75e9eccab82a31fb1452aee46f70db68d4693339
 - id: DLSS-3
   title: Node descriptions and backward-compatible navigation
   priority: 3
@@ -130,7 +130,7 @@
       description/category/tooltip additions only. Test actual bundled workflow
       widget and link compatibility. Avoid new frontend JS dependency for
       disabling controls; clear tooltips sufficient.
-  assessmentFor: a2b02ce99ddb7772a5b027c4ef1f87f69e0d790de80a08c26c394b37b005ab7d
+  assessmentFor: 7a92f8b0cf061cd0123b62506f63f5aaf9cc3b8a8fdcd74e113558cab0e774a2
 - id: DLSS-4
   title: Truthful runtime diagnostics and early preflight
   priority: 4
@@ -182,7 +182,7 @@
       direct users to the selected interpreter or to the automatic setup as an
       alternative, without promising that rerunning manual setup against an
       unchanged external environment will fix it."
-  assessmentFor: faf18653bacbccc7b8666f5742bb7951b2f16b64b36ce7c8d028764336be9e0c
+  assessmentFor: 220346d348078e5dffc0a120f9322b0b7ae80fa565ca0e9b29c91609cfd3963f
 - id: DLSS-5
   title: Honor bounded mode for all Easy operations
   priority: 5
@@ -229,7 +229,7 @@
       IMAGE batch/output still resides in memory. Remove the temporary Easy help
       restriction that bounded presets apply only to combined operation once
       solo paths honor them."
-  assessmentFor: 9904c10d6001df7e76e44da279ac0ce053171ad16a562ae21701bb4842f4bc1c
+  assessmentFor: 54434b7869536229f9ecd233baafaa49d43c0a19503da1af3f6aacfcfdd32f2c
 - id: DLSS-6
   title: Progress, responsive cancellation and advisory memory estimates
   priority: 6
@@ -272,7 +272,7 @@
       cleanup. Emit progress in model loops and bridge per-frame protocol when
       practical. Support all operations; do not introduce arbitrary five-minute
       timeouts or automatically change quality. Keep output schema compatible.
-  assessmentFor: 5d907cd14baf9b8cb54442cdb74d2291952267993ec04eb6b1ec8d6fdd787781
+  assessmentFor: 4e0c17489ab12b89a6cc61eaa689f99e243783eccdc6386b4156d34f8c9bbeed
 - id: DLSS-7
   title: Concise first-run guide and integrated regression evidence
   priority: 7
@@ -313,4 +313,4 @@
       smoke test if native environment permits, never claim quality verified
       from mocks. Review docs against final implementation. Run read-only
       audit-provenance on README after edits, no removal.
-  assessmentFor: ba3083d5cc51fbb73abc858c9c1ef3689477939b40c27b580c5a1ef890139e8f
+  assessmentFor: b86ac6afa9d697962f2911782bd915cfb5fb6694aa0c51aea344d5f8df5be665

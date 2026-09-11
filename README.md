@@ -26,8 +26,9 @@ An unofficial Windows-only ComfyUI extension that connects image and video batch
 The package includes the two project-specific VapourSynth wrappers
 `runtime/vsdlssnr.dll` and `runtime/vsdlsssr.dll`, plus the NVIDIA runtime DLLs
 used by the tested setup. The wrappers are not NVIDIA runtime DLLs. VapourKit
-supplies the isolated VapourSynth Python runtime; the installer downloads only
-VapourKit; a separate optional setup action downloads the open-source frame-generation worker.
+supplies the isolated VapourSynth Python runtime; the installer downloads
+VapourKit and installs NumPy there if needed. A separate optional setup action
+downloads the open-source frame-generation worker.
 
 ![Alyx original, neutral neural rendering, stronger style, and difference heatmap](docs/images/style-comparison.png)
 

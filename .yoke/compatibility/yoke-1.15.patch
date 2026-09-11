@@ -1,3 +1,5 @@
+diff --git a/dist/workspace/fingerprint.js b/dist/workspace/fingerprint.js
+index dfaead1..6562e2c 100644
 --- a/dist/workspace/fingerprint.js
 +++ b/dist/workspace/fingerprint.js
 @@ -1,6 +1,6 @@
@@ -8,7 +10,7 @@
  import { isAbsolute, join, relative, resolve } from 'node:path';
  /** Content identity, including new files. Symlinks are identified, never followed. */
  export function workspaceFingerprint(directory) {
-@@ -52,9 +52,14 @@
+@@ -52,9 +52,14 @@ export function workspaceFingerprint(directory) {
              if (stat.isSymbolicLink())
                  hash.update(`link:${readlinkSync(full)}`);
              else if (stat.isFile()) {
@@ -26,6 +28,8 @@
              }
              else if (stat.isDirectory())
                  throw new Error(`Cannot safely fingerprint a nested repository or directory entry: ${name}`);
+diff --git a/dist/code-intelligence/adapters/graphify.js b/dist/code-intelligence/adapters/graphify.js
+index b0324f7..6ef0868 100644
 --- a/dist/code-intelligence/adapters/graphify.js
 +++ b/dist/code-intelligence/adapters/graphify.js
 @@ -1,8 +1,8 @@
@@ -39,9 +43,11 @@
          aliases: { context: 'query_graph', symbol: 'get_node', neighbors: 'get_neighbors', trace: 'shortest_path', impact: 'get_pr_impact' },
      });
  }
+diff --git a/dist/code-intelligence/adapters/serena.js b/dist/code-intelligence/adapters/serena.js
+index 746f586..ffedacc 100644
 --- a/dist/code-intelligence/adapters/serena.js
 +++ b/dist/code-intelligence/adapters/serena.js
-@@ -2,7 +2,7 @@
+@@ -2,7 +2,7 @@ import { McpBackendAdapter } from './mcp.js';
  export const SERENA_VERSION = '1.7.1-dev';
  export function createSerenaAdapter(cwd, override) {
      return new McpBackendAdapter({
@@ -50,9 +56,11 @@
          aliases: {
              symbol: 'find_symbol', references: 'find_referencing_symbols', implementations: 'find_implementations', overview: 'get_symbols_overview', diagnostics: 'get_diagnostics_for_file',
              rename: 'rename_symbol', replace_symbol_body: 'replace_symbol_body', insert_before_symbol: 'insert_before_symbol', insert_after_symbol: 'insert_after_symbol', safe_delete: 'safe_delete_symbol',
+diff --git a/dist/code-intelligence/adapters/mcp.js b/dist/code-intelligence/adapters/mcp.js
+index 6a0fcb8..22a19e6 100644
 --- a/dist/code-intelligence/adapters/mcp.js
 +++ b/dist/code-intelligence/adapters/mcp.js
-@@ -2,6 +2,10 @@
+@@ -2,6 +2,10 @@ import { McpStdioClient } from '../mcp-client.js';
  function valueFromResult(value) {
      if (!value || typeof value !== 'object')
          return value;
@@ -63,9 +71,11 @@
      if (value.structuredContent !== undefined)
          return value.structuredContent;
      const text = Array.isArray(value.content) ? value.content.find((item) => item?.type === 'text')?.text : undefined;
+diff --git a/dist/code-intelligence/mcp-server.js b/dist/code-intelligence/mcp-server.js
+index e6ed6a6..d8a4392 100644
 --- a/dist/code-intelligence/mcp-server.js
 +++ b/dist/code-intelligence/mcp-server.js
-@@ -11,7 +11,7 @@
+@@ -11,7 +11,7 @@ const INPUT_SCHEMAS = {
      code_edit_apply: { type: 'object', required: ['workspace_id', 'plan_id', 'expected_snapshot_id', 'idempotency_key'], properties: { workspace_id: { type: 'string' }, plan_id: { type: 'string' }, expected_snapshot_id: { type: 'string' }, idempotency_key: { type: 'string' } } },
  };
  function arg(name, args) { return args.find(value => value.startsWith(`--${name}=`))?.slice(name.length + 3); }
@@ -74,7 +84,7 @@
  export async function runCodeIntelligenceServer(argv = process.argv.slice(2)) {
      const workspace = arg('workspace', argv) ?? process.cwd();
      const configured = loadConfig(workspace)?.codeIntelligence;
-@@ -39,7 +39,7 @@
+@@ -39,7 +39,7 @@ export async function runCodeIntelligenceServer(argv = process.argv.slice(2)) {
              return;
          }
          if (message.method === 'tools/list') {
@@ -83,9 +93,11 @@
              return;
          }
          if (message.method === 'tools/call') {
+diff --git a/dist/loop/run-command.js b/dist/loop/run-command.js
+index 5d70b65..8212fdc 100644
 --- a/dist/loop/run-command.js
 +++ b/dist/loop/run-command.js
-@@ -549,6 +549,9 @@
+@@ -549,6 +549,9 @@ export function runLoopCommand(targetDir, opts) {
              isolate,
              review,
              reporter,
@@ -111,3 +123,35 @@ index f4e55af..e681c12 100644
                  if (repair.kind === 'blocked')
                      return { kind: 'blocked', reason: 'repair-failed', summary: repair.summary, repairs: usedRepairRounds };
                  const gates = input.rerunGates();
+diff --git a/dist/loop/runner.js b/dist/loop/runner.js
+index 3bd7e6c..59b4f4e 100644
+--- a/dist/loop/runner.js
++++ b/dist/loop/runner.js
+@@ -295,8 +295,17 @@ export function runReviewAgent(inv) {
+         return { success: false, summary: processFailureSummary(error) };
+     }
+ }
++function feedbackForPrompt(feedback) {
++    try {
++        const request = JSON.parse(feedback);
++        // Structured independent review findings must reach the worker intact.
++        if (request?.source === 'review' && Array.isArray(request.findings))
++            return feedback;
++    } catch { /* ordinary diagnostic feedback keeps its original bound */ }
++    return feedback.slice(0, 8000);
++}
+ export function makeAsyncRunner(agent, opts = {}) {
+-    return (ctx) => startProviderProcess(agent, runnerInvocation(agent, buildClaudePrompt(ctx.story, contextBlockFor(ctx.targetDir, ctx.story) + (ctx.feedback ? "\nPrior independent failure; preserve useful existing changes and fix the root cause:\n" + ctx.feedback.slice(0, 8000) : ""), opts.onAmbiguity, opts.perfCommand), ctx.targetDir, true, opts.permissions ?? 'safe', opts.selection), { ...opts.process, attempt: ctx.attempt });
++    return (ctx) => startProviderProcess(agent, runnerInvocation(agent, buildClaudePrompt(ctx.story, contextBlockFor(ctx.targetDir, ctx.story) + (ctx.feedback ? "\nPrior independent failure; preserve useful existing changes and fix the root cause:\n" + feedbackForPrompt(ctx.feedback) : ""), opts.onAmbiguity, opts.perfCommand), ctx.targetDir, true, opts.permissions ?? 'safe', opts.selection), { ...opts.process, attempt: ctx.attempt });
+ }
+ export function makeRunner(agent, idleTimeoutMs = 0, opts = {}) {
+     // Claude always streams (see runnerInvocation) — capture the stream so tokens are
+@@ -307,7 +316,7 @@ export function makeRunner(agent, idleTimeoutMs = 0, opts = {}) {
+         opts.onStart?.(agent, opts.selection ?? {});
+         const started = Date.now();
+         const attributed = (tokens) => tokens ? { ...tokens, provider: agent, role: 'parent', storyId: ctx.story.id, durationMs: Date.now() - started } : undefined;
+-        const base = runnerInvocation(agent, buildClaudePrompt(ctx.story, contextBlockFor(ctx.targetDir, ctx.story) + (ctx.feedback ? "\nPrior independent failure; preserve useful existing changes and fix the root cause:\n" + ctx.feedback.slice(0, 8000) : ""), opts.onAmbiguity, opts.perfCommand), ctx.targetDir, captureTokens, opts.permissions ?? 'safe', opts.selection);
++        const base = runnerInvocation(agent, buildClaudePrompt(ctx.story, contextBlockFor(ctx.targetDir, ctx.story) + (ctx.feedback ? "\nPrior independent failure; preserve useful existing changes and fix the root cause:\n" + feedbackForPrompt(ctx.feedback) : ""), opts.onAmbiguity, opts.perfCommand), ctx.targetDir, captureTokens, opts.permissions ?? 'safe', opts.selection);
+         const inv = buildWatchdogInvocation(base, idleTimeoutMs, ctx.targetDir, true);
+         if (ctx.attempt)
+             inv.args.splice(inv.args.indexOf('--'), 0, `--attempt=${ctx.attempt}`);
