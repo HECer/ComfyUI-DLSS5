@@ -90,10 +90,18 @@ function Find-Bundled-Plugin([string] $Name) {
 function Find-VapourPython([string] $Root) {
     $candidates = @(Get-ChildItem -LiteralPath $Root -Filter "python.exe" -File -Recurse -ErrorAction SilentlyContinue)
     foreach ($candidate in $candidates) {
-        & $candidate.FullName -c "import vapoursynth" 2>$null
-        if ($LASTEXITCODE -eq 0) { return $candidate.FullName }
+        $previousErrorActionPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = "Continue"
+            $global:LASTEXITCODE = -1
+            & $candidate.FullName -c "import vapoursynth, numpy" 1>$null 2>$null
+            $probeExitCode = $global:LASTEXITCODE
+        } finally {
+            $ErrorActionPreference = $previousErrorActionPreference
+        }
+        if ($probeExitCode -eq 0) { return $candidate.FullName }
     }
-    throw "Could not find a Python interpreter with VapourSynth below $Root"
+    throw "Could not find a Python interpreter with VapourSynth and NumPy below $Root. Run install_runtime.ps1 to install the pinned NumPy bridge dependency, then retry setup."
 }
 
 $vsPython = Find-VapourPython $vapourKit
@@ -140,7 +148,6 @@ $config["nr_plugin"] = Join-Path $runtimeDir "vsdlssnr.dll"
 $config["nr_runtime"] = Join-Path $runtimeDir "nvngx_dlssnr.dll"
 $config["sr_plugin"] = Join-Path $runtimeDir "vsdlsssr.dll"
 $config["sr_runtime"] = Join-Path $runtimeDir "nvngx_dlss.dll"
-$config["dlssg_runtime"] = Join-Path $runtimeDir "dlssg\nvngx_dlssg.dll"
 $config["temp_dir"] = (Resolve-Path -LiteralPath $TempDirectory).Path
 if (-not $config.Contains("timeout_seconds")) {
     $config["timeout_seconds"] = 0

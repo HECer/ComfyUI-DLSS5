@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 from pathlib import Path
@@ -33,6 +34,9 @@ DLSSG_LEGACY_WORKER_SHA256 = {
 PACKAGE = Path(__file__).resolve().parent
 RUNTIME = PACKAGE / "runtime"
 BUNDLED_PLUGINS = ("vsdlssnr.dll", "vsdlsssr.dll")
+NUMPY_VERSION = "2.5.2"
+BRIDGE_PROBE_TIMEOUT_SECONDS = 30
+BRIDGE_INSTALL_TIMEOUT_SECONDS = 300
 
 
 def load_runtime_config(path: Path) -> dict:
@@ -155,14 +159,78 @@ def verify_runtime_hash(destination: Path, expected: str, label: str) -> str:
 
 def find_vapour_python(root: Path) -> Path:
     for candidate in sorted(root.rglob("python.exe")):
-        result = subprocess.run(
-            [str(candidate), "-c", "import vapoursynth"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        try:
+            result = subprocess.run(
+                [str(candidate), "-c", "import vapoursynth"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=BRIDGE_PROBE_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            continue
         if result.returncode == 0:
             return candidate
     raise RuntimeError("No VapourSynth-capable python.exe was found in VapourKit")
+
+
+def ensure_bridge_numpy(python: Path) -> str:
+    probe_command = [
+        str(python),
+        "-c",
+        "import numpy; print(numpy.__version__)",
+    ]
+
+    def probe():
+        try:
+            return subprocess.run(
+                probe_command,
+                capture_output=True,
+                text=True,
+                timeout=BRIDGE_PROBE_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(
+                f"Timed out while checking NumPy in the VapourSynth Python: {python}"
+            ) from exc
+
+    result = probe()
+    if result.returncode == 0:
+        return result.stdout.strip()
+
+    install_command = [
+        str(python),
+        "-m",
+        "pip",
+        "install",
+        f"numpy=={NUMPY_VERSION}",
+    ]
+    try:
+        installed = subprocess.run(
+            install_command,
+            capture_output=True,
+            text=True,
+            timeout=BRIDGE_INSTALL_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            "Timed out installing NumPy in the isolated VapourSynth Python. "
+            f"Retry the base installer or run: {' '.join(install_command)}"
+        ) from exc
+    if installed.returncode != 0:
+        detail = installed.stderr.strip() or installed.stdout.strip()
+        raise RuntimeError(
+            "NumPy installation failed in the isolated VapourSynth Python. "
+            f"Retry the base installer or run: {' '.join(install_command)}\n{detail}"
+        )
+
+    result = probe()
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip()
+        raise RuntimeError(
+            "NumPy remains unavailable in the isolated VapourSynth Python after "
+            f"installation. Retry the base installer.\n{detail}"
+        )
+    return result.stdout.strip()
 
 
 def install_dlssg_worker(destination: Path) -> str:
@@ -205,11 +273,6 @@ def install() -> str:
     config_path = RUNTIME / "config.json"
     config = load_runtime_config(config_path)
     RUNTIME.mkdir(parents=True, exist_ok=True)
-    dlssg_dir = RUNTIME / "dlssg"
-    dlssg_dir.mkdir(exist_ok=True)
-    dlssg_worker = dlssg_dir / "dlssg-worker.exe"
-    worker_hash = install_dlssg_worker(dlssg_worker)
-    print("DLSS-G worker SHA-256 verified.")
 
     neural_runtime = RUNTIME / "nvngx_dlssnr.dll"
     if not neural_runtime.is_file():
@@ -218,14 +281,17 @@ def install() -> str:
         )
 
     sr_runtime = RUNTIME / "nvngx_dlss.dll"
-    sr_runtime_hash = install_sr_runtime(sr_runtime)
+    if not sr_runtime.is_file():
+        raise RuntimeError(
+            f"Bundled nvngx_dlss.dll is missing from the extension package:\n{sr_runtime}"
+        )
+    nr_plugin, sr_plugin = stage_bundled_plugins(RUNTIME)
+    sr_runtime_hash = verify_runtime_hash(
+        sr_runtime, NVIDIA_DLSS_SHA256, "NVIDIA DLSS SR runtime"
+    )
     print("NVIDIA DLSS SR runtime SHA-256 verified.")
     neural_runtime_hash = verify_runtime_hash(
         neural_runtime, NVIDIA_DLSSNR_SHA256, "NVIDIA DLSS NR runtime"
-    )
-    dlssg_runtime = dlssg_dir / "nvngx_dlssg.dll"
-    dlssg_runtime_hash = verify_runtime_hash(
-        dlssg_runtime, NVIDIA_DLSSG_SHA256, "NVIDIA DLSS-G runtime"
     )
 
     archive = RUNTIME / ARCHIVE
@@ -254,8 +320,8 @@ def install() -> str:
     # VapourKit supplies the VapourSynth Python runtime.  The project wrappers
     # and the pinned NVIDIA SR runtime live together in the local runtime dir;
     # the SR wrapper uses its module directory as the NGX search path.
-    nr_plugin, sr_plugin = stage_bundled_plugins(RUNTIME)
     python = find_vapour_python(extracted)
+    numpy_version = ensure_bridge_numpy(python)
     config.update({
         "python": str(python.resolve()),
         "nr_plugin": str(nr_plugin.resolve()),
@@ -267,11 +333,7 @@ def install() -> str:
         "vapourkit_archive_sha256": SHA256,
         "nvidia_dlss_release": NVIDIA_DLSS_RELEASE,
         "nvidia_dlss_sha256": sr_runtime_hash,
-        "dlssg_runtime": str(dlssg_runtime.resolve()),
-        "dlssg_runtime_sha256": dlssg_runtime_hash,
-        "dlssg_worker": str(dlssg_worker.resolve()),
-        "dlssg_worker_release": DLSSG_WORKER_RELEASE,
-        "dlssg_worker_sha256": DLSSG_WORKER_SHA256,
+        "numpy_version": numpy_version,
     })
     config.setdefault("temp_dir", str((RUNTIME / "temp").resolve()))
     config.setdefault("timeout_seconds", 0)
@@ -284,13 +346,48 @@ def install() -> str:
         f"Bundled NVIDIA runtimes: {neural_runtime.name}, {sr_runtime.name}\n"
         f"Verified NVIDIA DLSS SR SHA-256: {sr_runtime_hash}\n"
         f"Verified VapourKit SHA-256: {SHA256}"
-        f"\nVerified DLSS-G worker SHA-256: {DLSSG_WORKER_SHA256}"
+        f"\nVapourSynth NumPy: {numpy_version}"
     )
 
 
-def main() -> int:
+def install_frame_generation() -> str:
+    config_path = RUNTIME / "config.json"
+    config = load_runtime_config(config_path)
+    dlssg_dir = RUNTIME / "dlssg"
+    dlssg_dir.mkdir(parents=True, exist_ok=True)
+    dlssg_runtime = dlssg_dir / "nvngx_dlssg.dll"
+    dlssg_runtime_hash = verify_runtime_hash(
+        dlssg_runtime, NVIDIA_DLSSG_SHA256, "NVIDIA DLSS-G runtime"
+    )
+    dlssg_worker = dlssg_dir / "dlssg-worker.exe"
+    worker_hash = install_dlssg_worker(dlssg_worker)
+    config.update({
+        "dlssg_runtime": str(dlssg_runtime.resolve()),
+        "dlssg_runtime_sha256": dlssg_runtime_hash,
+        "dlssg_worker": str(dlssg_worker.resolve()),
+        "dlssg_worker_release": DLSSG_WORKER_RELEASE,
+        "dlssg_worker_sha256": worker_hash,
+    })
+    write_runtime_config(config_path, config)
+    return (
+        "Frame Generation setup complete. Restart ComfyUI, then run "
+        "DLSS Frame Generation Runtime Status.\n"
+        f"Verified NVIDIA DLSS-G SHA-256: {dlssg_runtime_hash}\n"
+        f"Verified DLSS-G worker SHA-256: {worker_hash}"
+    )
+
+
+def main(args: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Install ComfyUI-DLSS5 runtimes")
+    parser.add_argument(
+        "--install-frame-generation",
+        action="store_true",
+        help="install the optional verified Frame Generation worker",
+    )
+    options = parser.parse_args(args)
     try:
-        print(install())
+        operation = install_frame_generation if options.install_frame_generation else install
+        print(operation())
         return 0
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

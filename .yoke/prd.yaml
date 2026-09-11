@@ -62,7 +62,7 @@
       verify:
         - python -m pytest -q -p no:cacheprovider tests/test_usability.py -k
           bridge_numpy
-  passes: false
+  passes: true
   needs:
     - DLSS-1
   area: dlss-usability

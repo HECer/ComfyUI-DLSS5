@@ -9,13 +9,15 @@ downloaded VapourKit/worker files remain machine-local.
 For the simplest installation:
 
 1. Queue **DLSS Runtime Setup (One Click)** with `Check location` to display this directory.
-2. Select `Install verified VapourKit`, enable its confirmation control, and queue the setup node again. The installer validates and uses the bundled wrappers and NVIDIA runtimes, then obtains VapourKit's Python/runtime files and the worker.
+2. Select `Install verified VapourKit`, enable its confirmation control, and queue the setup node again. This installs the SR/NR base runtime: bundled wrappers, verified NVIDIA SR/NR runtimes, and VapourKit's Python with NumPy. Existing working NumPy versions and custom configuration are preserved.
 3. Restart ComfyUI and check the Runtime Status node.
+4. For optional Frame Generation, select `Install verified Frame Generation`, enable confirmation, and queue the setup node. This separately verifies the FG runtime and downloads the pinned worker.
 
-The one-click installer verifies the bundled runtime hashes, downloads the
-pinned VapourKit nightly and the open-source DLSS-G worker, and writes
-`config.json`. Downloaded and extracted runtime files remain ignored by Git and
-the Registry package.
+The base installer verifies the SR/NR runtime hashes, downloads the pinned
+VapourKit nightly when needed, checks its isolated NumPy dependency, and writes
+`config.json`. It does not require or download Frame Generation components.
+Downloaded and extracted runtime files remain ignored by Git and the Registry
+package.
 
 The five runtime DLLs listed above are intentionally tracked project assets.
 Never add other NVIDIA DLLs, patched DLLs, executables, API keys, or
@@ -39,7 +41,9 @@ Frame Generation uses the open-source native worker from
 - `dlssg-worker.exe`
 - `nvngx_dlssg.dll`
 
-`install_runtime.py` downloads the pinned worker release and verifies its SHA-256
-hash. The matching `nvngx_dlssg.dll` is included above. Source, build
+Run `python install_runtime.py --install-frame-generation` or
+`./install_runtime.ps1 -InstallFrameGeneration` to download the pinned worker
+release and verify its SHA-256 hash. Without that flag, the installer sets up only
+the SR/NR base runtime. The matching `nvngx_dlssg.dll` is included above. Source, build
 instructions, and the wire protocol are published with the worker repository.
 Run **DLSS Frame Generation Runtime Status** before processing a video.

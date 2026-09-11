@@ -1,5 +1,7 @@
 [CmdletBinding()]
-param()
+param(
+    [switch] $InstallFrameGeneration
+)
 
 $ErrorActionPreference = "Stop"
 $repo = $PSScriptRoot
@@ -18,5 +20,9 @@ if (-not $python) {
     throw "Could not locate ComfyUI Python. Run install_runtime.py with the Python executable that launches ComfyUI."
 }
 
-& $python (Join-Path $repo "install_runtime.py")
+$arguments = @((Join-Path $repo "install_runtime.py"))
+if ($InstallFrameGeneration) {
+    $arguments += "--install-frame-generation"
+}
+& $python @arguments
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

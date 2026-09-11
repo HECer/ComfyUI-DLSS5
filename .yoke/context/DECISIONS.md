@@ -5,3 +5,6 @@
 
 ## 2026-09-11 — DLSS-1: Repeatable setup and configuration preservation
 route=codex-frontier (gate failure escalated by project rule); codex implemented DLSS-1
+
+## 2026-09-11 — DLSS-2: Separate optional Frame Generation installation
+Supervisor verified the retained DLSS-2 implementation after the explicit checkpoint; no new implementation model call was made.

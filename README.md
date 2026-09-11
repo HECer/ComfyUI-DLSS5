@@ -13,7 +13,7 @@ The package includes the two project-specific VapourSynth wrappers
 `runtime/vsdlssnr.dll` and `runtime/vsdlsssr.dll`, plus the NVIDIA runtime DLLs
 used by the tested setup. The wrappers are not NVIDIA runtime DLLs. VapourKit
 supplies the isolated VapourSynth Python runtime; the installer downloads only
-VapourKit and the optional open-source frame-generation worker.
+VapourKit; a separate optional setup action downloads the open-source frame-generation worker.
 
 ![Alyx original, neutral neural rendering, stronger style, and difference heatmap](docs/images/style-comparison.png)
 
@@ -118,8 +118,9 @@ ReShade, game-specific injectors, DLSS override utilities, and Nexus mods are no
 2. Restart ComfyUI once so Manager installs the dependencies declared in `pyproject.toml`/`requirements.txt`.
 3. Add **DLSS Runtime Setup (One Click)** to a workflow, leave `action` at `Check location`, and queue it. The output shows the exact local `runtime` directory and creates it if necessary.
 4. In the same node, select `Install verified VapourKit`, enable `confirm_download`, and queue it again.
+5. Only for optional Frame Generation, select `Install verified Frame Generation`, enable `confirm_download`, and queue that action separately.
 
-The installer uses the bundled `nvngx_dlss.dll`, `nvngx_dlssnr.dll`, `nvngx_dlssg.dll`, and VapourSynth wrappers, verifies the bundled runtime hashes, downloads only the pinned [VapourKit Windows nightly](https://github.com/Kim2091/vapourkit-nightly/releases/tag/nightly-2026-08-31) and the open-source DLSS-G worker, extracts VapourKit into the ignored local runtime directory, and writes `runtime/config.json`. Restart ComfyUI and run **DLSS 5 Runtime Status**.
+The base installer uses the bundled `nvngx_dlss.dll`, `nvngx_dlssnr.dll`, and VapourSynth wrappers, verifies the SR/NR runtime hashes, downloads the pinned [VapourKit Windows nightly](https://github.com/Kim2091/vapourkit-nightly/releases/tag/nightly-2026-08-31) when needed, and checks NumPy in that isolated interpreter. Missing NumPy is installed there; an existing working version is preserved. It writes `runtime/config.json` while preserving custom settings. Base setup does not require or download FG components. Restart ComfyUI and run **DLSS 5 Runtime Status**.
 
 The 368 MB VapourKit archive is downloaded only once. Extracted files, the worker, and configuration remain local; the bundled runtime DLLs and wrappers are part of the repository package.
 
@@ -315,7 +316,7 @@ Start with a short clip. Confirm frame count, FPS, dimensions, and available tem
 
 Import [`workflows/06_video_dlssg_24_to_48.json`](workflows/06_video_dlssg_24_to_48.json). It estimates current-to-previous motion with RAFT and inserts one generated frame between each pair of source frames. The example is configured for 24 to 48 fps; change both the node's input FPS and the encoder FPS when your source differs.
 
-Frame Generation uses the open-source [DLSS-G Stream Worker](https://github.com/HECer/DLSSG-Stream-Worker). The runtime installer downloads its pinned release and verifies the SHA-256 hash; the matching `nvngx_dlssg.dll` is bundled in `runtime/dlssg/`. See [runtime sources](docs/RUNTIME_SOURCES.md) before installing native binaries.
+Frame Generation uses the open-source [DLSS-G Stream Worker](https://github.com/HECer/DLSSG-Stream-Worker). Select `Install verified Frame Generation` in the setup node, or run `python install_runtime.py --install-frame-generation` / `./install_runtime.ps1 -InstallFrameGeneration`. This optional action downloads the pinned worker and verifies its SHA-256 hash; the matching `nvngx_dlssg.dll` is bundled in `runtime/dlssg/`. See [runtime sources](docs/RUNTIME_SOURCES.md) before installing native binaries.
 
 ![Complete DLSS Frame Generation workflow in ComfyUI](docs/images/comfyui-dlssg-workflow.png)
 
@@ -399,7 +400,7 @@ Interpolates an IMAGE batch at 2x, 3x, or 4x frame rate. It consumes the encoded
 
 `runtime_fallback` fails by default if the worker omits generated frames. The optional hold mode preserves duration by duplicating the preceding source frame, but it can produce visible judder and should not be mistaken for successful interpolation.
 
-This node uses a separately released MIT-licensed native worker whose complete source and automated Windows build are public. The installer can download the pinned worker automatically; the compatible NVIDIA runtime is included in `runtime/dlssg/`.
+This node uses a separately released MIT-licensed native worker whose complete source and automated Windows build are public. The explicit `Install verified Frame Generation` action downloads the pinned worker; the compatible NVIDIA runtime is included in `runtime/dlssg/`.
 
 ### DLSS Frame Generation Runtime Status
 

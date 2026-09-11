@@ -1265,7 +1265,11 @@ class DLSS5RuntimeSetup:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "action": (["Check location", "Install verified VapourKit"],),
+                "action": ([
+                    "Check location",
+                    "Install verified VapourKit",
+                    "Install verified Frame Generation",
+                ],),
                 "confirm_download": ("BOOLEAN", {"default": False}),
             }
         }
@@ -1305,8 +1309,10 @@ class DLSS5RuntimeSetup:
             return (
                 "Download not started. Enable confirm_download after reviewing the pinned source in the README.",
             )
-        from .install_runtime import install
+        from .install_runtime import install, install_frame_generation
 
+        if action == "Install verified Frame Generation":
+            return (install_frame_generation(),)
         return (install(),)
 
 
