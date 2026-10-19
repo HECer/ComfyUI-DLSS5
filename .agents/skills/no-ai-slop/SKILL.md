@@ -38,8 +38,7 @@ materially change the edit. If the goal is unclear, ask what the reader should t
 - Preserve useful edge, strong opinions, humor, and honest uncertainty.
 - Keep the existing structure unless it hurts the piece. Report any meaningful reorganization.
 - Preserve precise technical and domain terms. A word that is empty in marketing copy can still be
-  correct in a product vocabulary. In Yoke, **coding harness** is an established, precise term; do
-  not replace it merely because "harness" is often vague elsewhere.
+  correct in a product vocabulary; do not replace it merely because it is often vague elsewhere.
 
 ## Words and phrases to inspect
 

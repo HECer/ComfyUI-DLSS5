@@ -1,65 +1,39 @@
 ---
 name: authoring-prd
-description: Use when turning a product idea or change into a loop-ready continuous backlog with small stories and executable behavioral evidence.
+description: Use when turning a product idea or change into a continuous backlog with small stories and executable behavioral evidence.
 ---
 
 # Authoring a PRD
 
-The Yoke loop is only as good as its stories. Keep the backlog continuous: new requests become
-new stories; they do not require a release object.
+Turn agreed product scope into small, independently verifiable stories. Follow an existing
+project backlog format when one is established.
 
 ## Story rules
 
-1. One iteration per story. Prefer 5–12 small stories over a few epics.
+1. One independently reviewable outcome per story. Prefer several small stories over a few epics.
 2. Each story leaves the project buildable and testable.
-3. Acceptance describes observable behavior, never implementation. Give each of 2–5 criteria
-   a stable `id`, behavioral `text`, and `verify` list with one or more real commands proving
-   that exact outcome.
-4. Use dense priorities from 1; order by dependency, then risk.
-5. Greenfield `STORY-1` creates the skeleton, runnable suite, and `verify.command`.
-6. Express performance with numbers and executable benchmarks, not words such as “fast”.
-7. Resolve planning questions before unattended execution. `yoke prd check` rejects unresolved
-   placeholders; critical irreversible choices use the structured decision channel.
-8. Use `needs` only for hard prerequisites, `area` for collision domains, and `agent` only as
-   a supported harness affinity hint.
-9. Keep planning on the start model. Add an `assessment` to each story: `taskClass`
-   (`mechanical`, `implementation`, `debugging`, `architecture`), `difficulty`, `uncertainty`,
-   `risk`, `scope`, `testability` (each `low`, `medium`, `high`), a concise `reason`, and
-   an actionable `approach` including checks. High testability means executable checks
-   reliably detect mistakes. Small security-sensitive changes can still be high-risk.
-   These are planning judgments, never invented success probabilities; Yoke selects the
-   execution model from configured profiles and independent outcomes.
+3. Acceptance describes observable behavior, not implementation. Give each of 2–5 criteria a
+   stable ID, behavioral text, and one or more real verification commands.
+4. Use dense priorities starting at 1; order by dependency and then risk.
+5. Greenfield work includes a runnable project skeleton and its first behavioral checks.
+6. Express performance goals with numbers and executable benchmarks, not words such as “fast”.
+7. Record hard prerequisites and shared-file collision areas when they affect sequencing.
+8. Assess risk, uncertainty, scope, and testability with a short reason and concrete checks.
+   These are planning judgments, not invented success probabilities.
 
-## Format (`.yoke/prd.yaml`)
+## Suggested format
 
 ```yaml
-- id: STORY-1
-  title: scaffold a TypeScript CLI with vitest
-  priority: 1
-  acceptance:
-    - id: cli-help-runs
-      text: the CLI help command exits 0 and prints usage
-      verify: [npm run test:cli-help-runs]
-    - id: test-runner-starts
-      text: the project test runner starts and reports at least one passing test
-      verify: [npm run test:test-runner-starts]
-  passes: false
-- id: STORY-2
-  title: add the sum command
-  priority: 2
-  needs: [STORY-1]
-  area: cli
-  agent: codex
-  acceptance:
-    - id: sum-valid
-      text: cli sum 1 2 prints 3
-      verify: [npm run test:sum-valid]
-    - id: sum-invalid
-      text: non-numeric input exits 1 with an error message
-      verify: [npm run test:sum-invalid]
-  passes: false
+stories:
+  - id: STORY-1
+    title: scaffold a TypeScript CLI with a runnable test suite
+    priority: 1
+    acceptance:
+      - id: cli-help-runs
+        text: the CLI help command exits 0 and prints usage
+        verify: [npm run test:cli-help-runs]
+    status: proposed
 ```
 
-Every story has 2–5 structured criteria. Each `verify` entry is one approved test command whose
-normalized text contains its criterion ID; never use shell operators or a broad unrelated suite.
-`passes` is owned by the loop and always starts false. Validate with `yoke prd check`.
+Every story has 2–5 structured criteria. Each verification entry names a real project command that
+proves that criterion. Do not mark a story complete until its acceptance evidence is available.

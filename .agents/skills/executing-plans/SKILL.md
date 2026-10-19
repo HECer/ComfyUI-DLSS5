@@ -11,7 +11,7 @@ Load plan, review critically, execute all tasks, report when complete.
 
 **Announce at start:** "I'm using the executing-plans skill to implement this plan."
 
-**Note:** Tell your human partner that Superpowers works much better with access to subagents. The quality of its work will be significantly higher if run on a platform with subagent support (such as Claude Code or Codex). If subagents are available, use superpowers:subagent-driven-development instead of this skill.
+Use `subagent-driven-development` only when the host exposes delegation and the current run permits it. Keep delegated work within its assigned scope and avoid nested delegation unless authorized. Arrange independent review separately when required. Without delegation, execute serially and report any unavailable independent review explicitly. Subagents alone do not guarantee better quality or faster completion.
 
 ## The Process
 

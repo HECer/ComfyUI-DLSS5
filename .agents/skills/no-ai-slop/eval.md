@@ -15,7 +15,7 @@ and gives a short fix without rewriting, scoring, or claiming authorship.
 4. Is the amount of cutting proportional to the observed problems?
 5. Does useful setup remain while generic throat-clearing is gone?
 6. Was structure preserved unless changing it improved comprehension?
-7. Are precise technical and domain terms unchanged, including established Yoke product language?
+7. Are precise technical and domain terms unchanged, including established product terminology?
 
 ## Clarity
 

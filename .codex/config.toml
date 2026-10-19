@@ -1,8 +1,0 @@
-# Yoke facade uses the isolated worker cwd and locally tested compatibility fixes.
-[features]
-hooks = true
-
-[mcp_servers.code-intelligence]
-command = "node"
-args = ["G:/NN-Developed/ComfxyUI-DLSS5/ComfyUI-DLSS5/.yoke/tooling/yoke/dist/cli.js", "code-intelligence-server", "--mode=active"]
-env = { GRAFT_NO_GITIGNORE = "1", GRAFT_NO_IGNORE = "1", DO_NOT_TRACK = "1" }

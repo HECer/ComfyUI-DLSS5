@@ -9,10 +9,6 @@ likely misrouting.
 Keep common actions and constraints in `SKILL.md`. Put substantial conditional procedures,
 formats, or examples in linked resources, and state when the agent should load each one.
 
-## Invocation
-
-Yoke records invocation in `canon/manifest.yaml`:
-
 - `auto` allows provider-supported automatic selection and explicit user invocation.
 - `manual` excludes automatic advertising and requires explicit invocation.
 

@@ -1,0 +1,99 @@
+{
+  "timestamp": "2026-10-19T21:22:21.951285+00:00",
+  "source_kind": "repeated image with synthetic motion; excludes file decoding",
+  "source_size": [
+    1920,
+    1080
+  ],
+  "source_sha256": "0bf976b2604a609de126adb6246a154ad87167308252afb8eece271b9807e3eb",
+  "torch": "2.9.1+cu130",
+  "python": "3.12.9 | packaged by Anaconda, Inc. | (main, Feb  6 2025, 18:49:16) [MSC v.1929 64 bit (AMD64)]",
+  "gpu": "NVIDIA GeForce RTX 5090",
+  "source_fingerprint": {
+    "nodes.py": "ed0fe7f40d96ff9a0fa11b3426c9606d81fa15283259f729fce12e83b7010d5b",
+    "depth_backend.py": "bddd4e0a0b73ea14d17ff1a2089f2573366f328decd2c8e91e1fe0e9597b1e23",
+    "benchmark_fast_depth.py": "c59ac4159a208d22c30056937e20573fa36bd6927b4dfd1eb93c7eb6314d3f8a"
+  },
+  "timing_scope": "node processing with CPU IMAGE input/output; excludes load/decode, queue wait and save/encode; instrumented CUDA synchronization included; inclusive stages must not be summed",
+  "samples_seconds": [
+    28.451839300003485,
+    29.436668600013945,
+    28.15136610000627
+  ],
+  "sample_count": 3,
+  "range_seconds": [
+    28.15136610000627,
+    29.436668600013945
+  ],
+  "median_seconds": 28.451839300003485,
+  "median_ms_per_source_frame": 14225.919650001742,
+  "source_fps": 0.0702942252313282,
+  "cold_setup_seconds": 56.52537419999135,
+  "output_size": [
+    3840,
+    2160
+  ],
+  "inclusive_stage_samples_seconds": [
+    {
+      "depth_guide_inclusive": 0.13865840001381002,
+      "motion": 0.07571199999074452,
+      "stabilization": 0.6524583999998868,
+      "native_sr": 9.16539670000202,
+      "native_nr": 16.830428300003405,
+      "native_pipeline_inclusive": 26.01342429999204
+    },
+    {
+      "depth_guide_inclusive": 0.11927080000168644,
+      "motion": 0.058615300004021265,
+      "stabilization": 0.5384472000005189,
+      "native_sr": 10.562148499986506,
+      "native_nr": 16.15509870000824,
+      "native_pipeline_inclusive": 26.754561800000374
+    },
+    {
+      "depth_guide_inclusive": 0.13559469999745488,
+      "motion": 0.09199260000605136,
+      "stabilization": 0.5338651999918511,
+      "native_sr": 10.471855699986918,
+      "native_nr": 14.604468099991209,
+      "native_pipeline_inclusive": 25.12652390000585
+    }
+  ],
+  "gate": "FAIL",
+  "options": {
+    "model": "YOLO26 Nano (optional)",
+    "precision": "FP16",
+    "input_size": 392,
+    "motion_input_size": 512,
+    "frames": 2,
+    "width": 1920,
+    "height": 1080,
+    "image": "docs\\images\\benchmark-rainy-city-source.png",
+    "warmups": 1,
+    "repeats": 3,
+    "minimum_fps": 30.0,
+    "depth_only": false,
+    "operation": "Upscale + neural rendering"
+  },
+  "runtime_setup": "Existing VapourKit bridge with process-only DLSS5_PYTHON, DLSS5_PLUGIN, DLSS5_SNIPPET, DLSS5_SR_PLUGIN, DLSS5_SR_RUNTIME and DLSS5_TEMP_DIR overrides; source configuration was not rewritten.",
+  "limitations": [
+    "Repeated still with synthetic horizontal motion, not real video quality validation.",
+    "Source is CPU IMAGE; no load/decode, queue waiting or save/encode inside timing.",
+    "Native timings include process creation, NPY I/O, wrapper/runtime startup and inference.",
+    "No TensorRT engine run; PyTorch/FP16 only."
+  ],
+  "verification": {
+    "cpu_suite": {
+      "passed": 306,
+      "skipped": 4,
+      "seconds": 130.25
+    },
+    "cuda_focused_suite": {
+      "passed": 19,
+      "seconds": 23.69
+    },
+    "independent_review": "PASS; no remaining important issues",
+    "comfyui_ui": "Model choices, English tooltips, optional widgets and legacy widget deserialization checked in isolated instance",
+    "real_models": "Official YOLO26 Nano and Small inference passed shape/range/finite checks; PyTorch FP16"
+  }
+}

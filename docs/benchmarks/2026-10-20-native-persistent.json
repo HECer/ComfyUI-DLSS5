@@ -1,0 +1,85 @@
+{
+  "timestamp": "2026-10-19T22:24:50.781265+00:00",
+  "options": {
+    "model": "YOLO26 Nano (optional)",
+    "precision": "FP16",
+    "input_size": 392,
+    "motion_input_size": 512,
+    "frames": 2,
+    "width": 1920,
+    "height": 1080,
+    "image": "E:\\NN-Developed\\ComfxyUI-DLSS5\\ComfyUI-DLSS5\\docs\\images\\benchmark-rainy-city-source.png",
+    "warmups": 1,
+    "repeats": 3,
+    "minimum_fps": 30.0,
+    "depth_only": false,
+    "native_mode": "Persistent NR worker (reuse initialization)",
+    "operation": "Upscale + neural rendering",
+    "output": "E:\\NN-Developed\\ComfxyUI-DLSS5\\ComfyUI-DLSS5\\docs\\benchmarks\\2026-10-20-native-persistent.json"
+  },
+  "source_kind": "repeated image with synthetic motion; excludes file decoding",
+  "source_size": [
+    1920,
+    1080
+  ],
+  "source_sha256": "0bf976b2604a609de126adb6246a154ad87167308252afb8eece271b9807e3eb",
+  "torch": "2.9.1+cu130",
+  "python": "3.12.9 | packaged by Anaconda, Inc. | (main, Feb  6 2025, 18:49:16) [MSC v.1929 64 bit (AMD64)]",
+  "gpu": "NVIDIA GeForce RTX 5090",
+  "source_fingerprint": {
+    "nodes.py": "ba0fdd1d51428208d60be2676797bed7c59592da36c439c30edddf6c6115dc2b",
+    "depth_backend.py": "bddd4e0a0b73ea14d17ff1a2089f2573366f328decd2c8e91e1fe0e9597b1e23",
+    "bridge_runner.py": "055b0d4afd28490531c4f741f1209aaa08944745573808e94de3eebec2a49c54",
+    "sr_bridge_runner.py": "af55b57e8d562aa9be4a96ab99815a5414db5ddd386fc41e7bf587d580e047e4",
+    "native_worker.py": "ac629c2b2d23bcaa13cee4a7ee80a9c1b897fd7feb853953b1c73f4ce0a585d6",
+    "native_session.py": "f2a66bd86ad861022ba890993d0fecfcc3ca97c5150068cd0801875b5ff7cded",
+    "benchmark_fast_depth.py": "ac26ca7cf68fbfdda7907b1760ebfc0f035b70c970ef7907ce5322096c4d6658"
+  },
+  "timing_scope": "node processing with CPU IMAGE input/output; excludes load/decode, queue wait and save/encode; instrumented CUDA synchronization included; inclusive stages must not be summed",
+  "samples_seconds": [
+    22.75511149999511,
+    29.211343999995734,
+    25.78721900000528
+  ],
+  "sample_count": 3,
+  "range_seconds": [
+    22.75511149999511,
+    29.211343999995734
+  ],
+  "median_seconds": 25.78721900000528,
+  "median_ms_per_source_frame": 12893.60950000264,
+  "source_fps": 0.07755780101761227,
+  "cold_setup_seconds": 64.15586780000012,
+  "runtime_report": "Easy preset: Short video / best quality; requested=Short video / best quality; guide=Optical Flow (fastest); depth=YOLO26 Nano (optional); YOLO26 Nano (optional); backend=PyTorch; requested_precision=FP16; precision=FP16; input_size=416; frames=2; elapsed=0.248s (includes first-use setup when needed)\nSpeed-first depth, 6.3M parameters; lower detail and no intrinsic temporal consistency. Requires optional Ultralytics with depth support (AGPL-3.0). Official weights download on first use. TensorRT timings are not PyTorch or pipeline timings.; motion_input=512x288; operation=Upscale + neural rendering; mode=Persistent full sequence; input=2 frames 1920x1080; output=2 frames 3840x2160\nscale=2x; quality=Quality\nlook=Neutral / faithful; style=0 - neutral; style_strength=0.595; intensity=0.85; local_structure=1; skin_structure=-1; auto_mask=True; depth_inverted=True\nStorage advice: 2 frames; input=1920x1080; output=3840x2160; float32 arrays=547430400 bytes; peak native temp=597196800 bytes (array payloads). Arrays include full input, RGB guides, output and combined SR intermediate; estimate excludes additional working copies, model weights, file/log overhead and full VRAM prediction. Available temp disk=3999154552832 bytes.\nframes 0-1: mode=Persistent full sequence; overlap=8; Official NVIDIA DLSS Super Resolution; 1920x1080 -> 3840x2160; scale=2x; quality=Quality; guides=depth+motion | DLSS-NR 310.8 Feature 18; 3840x2160; 2 frame(s); temporal=yes; guides=depth+motion; native_mode=Persistent NR worker (reuse initialization); initialization=reused",
+  "output_size": [
+    3840,
+    2160
+  ],
+  "inclusive_stage_samples_seconds": [
+    {
+      "depth_guide_inclusive": 0.19448049999482464,
+      "motion": 0.08374640000693034,
+      "stabilization": 0.633835699991323,
+      "native_sr": 9.671037599997362,
+      "native_nr": 9.37302839999029,
+      "native_pipeline_inclusive": 19.09010030000354
+    },
+    {
+      "depth_guide_inclusive": 0.196805100000347,
+      "motion": 0.07356999999319669,
+      "stabilization": 0.652784599995357,
+      "native_sr": 16.586738999991212,
+      "native_nr": 9.65409599999839,
+      "native_pipeline_inclusive": 26.309779200004414
+    },
+    {
+      "depth_guide_inclusive": 0.24788799999805633,
+      "motion": 0.11267180000140797,
+      "stabilization": 0.6499112000019522,
+      "native_sr": 11.230137099992135,
+      "native_nr": 9.623544699992635,
+      "native_pipeline_inclusive": 20.920042400000966
+    }
+  ],
+  "gate": "FAIL"
+}

@@ -31,7 +31,7 @@ HEAD_SHA=$(git rev-parse HEAD)
 
 **2. Dispatch code-reviewer subagent:**
 
-Use Task tool with superpowers:code-reviewer type, fill template at `code-reviewer.md`
+Use the host's available read-only reviewer mechanism and fill the [review template](code-reviewer.md). Do not assume a `Task` tool exists. If another workflow controls review, hand evidence to its assigned reviewer instead of launching nested agents. If independent review is unavailable, report that limitation; self-review is not an equivalent substitute.
 
 **Placeholders:**
 - `{WHAT_WAS_IMPLEMENTED}` - What you just built
@@ -102,4 +102,4 @@ You: [Fix progress indicators]
 - Show code/tests that prove it works
 - Request clarification
 
-See template at: requesting-code-review/code-reviewer.md
+See the [review template](code-reviewer.md).

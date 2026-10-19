@@ -6,7 +6,6 @@ description: Use when building or reviewing any UI — detect and remove the vis
 # Un-slop the UI
 
 AI-built UIs are "recognizable on sight" — a homogeneous look from a handful of default choices.
-Before finishing UI work, remove these tells. Run `yoke design-scan .` for the statically
 detectable ones, then apply judgement for the structural ones the scanner can't see.
 
 ## The ranked tells (and the fix)
@@ -28,7 +27,6 @@ detectable ones, then apply judgement for the structural ones the scanner can't 
 
 ## Rule
 
-Treat `yoke design-scan .` as a gate (it exits non-zero over budget). Fix findings, then
 eyeball the structural tells above. Distinctive, intentional > generic-but-safe.
 
-*Rubric informed by the MIT-licensed research in [vibecoded-design-tells](https://github.com/JCarterJohnson/vibecoded-design-tells) (© Carter Johnson). Yoke implements the idea natively; no code/data copied.*
+*Rubric informed by the MIT-licensed research in [vibecoded-design-tells](https://github.com/JCarterJohnson/vibecoded-design-tells) (© Carter Johnson).*

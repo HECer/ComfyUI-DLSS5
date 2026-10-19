@@ -32,7 +32,7 @@ Install `requirements.txt` with the Python executable that launches ComfyUI. Por
 
 ## The first run appears stuck
 
-Easy downloads Depth Anything V2 Small (DA-V2) on first use and RAFT weights for video quality presets. Check network access, model caches, console output, and free disk space. Easy continues to use DA-V2 for video; VDA is the separate Video Depth Anything model in [workflow 04](../workflows/04_video_vda_small_temporal_2x.json), with its own first-use source/weights downloads.
+Easy downloads Depth Anything V2 Small (DA-V2) on first use and RAFT weights for video quality presets. Check network access, model caches, console output, and free disk space. Easy uses DA-V2 for video by default; VDA is the separate Video Depth Anything model in [workflow 04](../workflows/04_video_vda_small_temporal_2x.json), with its own first-use source/weights downloads. Explicit Easy overrides can select VDA or optional YOLO26 instead; see [fast depth setup](FAST_DEPTH.md) for model requirements and controls.
 
 ComfyUI progress advances through guide work and native SR/NR frames/windows. Downloads and individual model calls may take time between updates. VDA and FlashDepth provide stage-boundary progress, not per-frame progress inside their model calls.
 

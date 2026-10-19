@@ -1,7 +1,7 @@
 # Decisions
 
-> Append-only ledger. The Yoke loop adds an entry per completed story; agents add
-> entries for non-obvious calls made during interactive work. Newest at the bottom.
+> Append-only ledger. Agents add entries for non-obvious decisions made during work.
+> Newest at the bottom.
 
 ## 2026-09-11 — DLSS-1: Repeatable setup and configuration preservation
 route=codex-frontier (gate failure escalated by project rule); codex implemented DLSS-1
@@ -23,3 +23,9 @@ route=codex-frontier (explicit project routing rule); codex implemented DLSS-6
 
 ## 2026-09-11 — DLSS-7: Concise first-run guide and integrated regression evidence
 route=codex-frontier (explicit project routing rule); codex implemented DLSS-7
+
+## 2026-10-19 — Fast depth: Explicit model choices preserve legacy defaults
+Add a unified depth guide with optional YOLO26 Nano/Small and optional Easy depth/motion overrides. Keep omitted Easy and DA-V2 controls numerically unchanged. The user targets 4K output above 30 source FPS on RTX 5090; distinguish guide throughput, complete node processing and complete video-file processing.
+
+## 2026-10-19 — Fast depth: Bound preprocessing and intermediate GPU memory
+YOLO preprocessing first resizes on the inference device to limit CPU work; normalize scalar depth in bounded batches and accumulate raw maps on CPU. Preserve full-size outputs and frame-relative motion units. Disable Ultralytics automatic package installation before imports and in cached dependency checkers; optional execution must never replace the host's dependencies.
