@@ -29,3 +29,6 @@ Add a unified depth guide with optional YOLO26 Nano/Small and optional Easy dept
 
 ## 2026-10-19 — Fast depth: Bound preprocessing and intermediate GPU memory
 YOLO preprocessing first resizes on the inference device to limit CPU work; normalize scalar depth in bounded batches and accumulate raw maps on CPU. Preserve full-size outputs and frame-relative motion units. Disable Ultralytics automatic package installation before imports and in cached dependency checkers; optional execution must never replace the host's dependencies.
+
+## 2026-10-25 — release: 0.5.0 Experimental Preview
+The user authorized deployment after the preview limitations were disclosed. Use the existing three-part pyproject version convention, tag GitHub v0.5.0 as a pre-release, and publish Registry version 0.5.0 with explicit experimental/failed-4K30 wording. Preserve all runtime/model numerical defaults. Resolve/verify LFS before publishing directly through the tested Comfy CLI, because the composite action performs another checkout without LFS.

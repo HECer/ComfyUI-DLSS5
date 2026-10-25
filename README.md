@@ -1,5 +1,7 @@
 # Experimental DLSS Neural Rendering for ComfyUI
 
+**v0.5.0 Experimental Preview:** selectable guide models and optional persistent NR execution. The measured 4K output throughput remains below 30 source FPS; see [measurements and limits](docs/NATIVE_WORKER.md#matched-local-measurement-on-2026-10-20).
+
 <p align="center">
   <img src="docs/images/icon.png" width="160" alt="Experimental DLSS Neural Rendering project icon">
 </p>
