@@ -111,7 +111,7 @@ You MUST complete each phase before proceeding to the next.
 
    **WHEN error is deep in call stack:**
 
-   See `root-cause-tracing.md` in this directory for the complete backward tracing technique.
+   See [root-cause tracing](root-cause-tracing.md) for the backward tracing technique.
 
    **Quick version:**
    - Where does bad value originate?
@@ -273,24 +273,20 @@ If systematic investigation reveals issue is truly environmental, timing-depende
 3. Implement appropriate handling (retry, timeout, error message)
 4. Add monitoring/logging for future investigation
 
-**But:** 95% of "no root cause" cases are incomplete investigation.
+Before declaring the cause unknowable, record what was ruled out and which observations are still missing.
 
 ## Supporting Techniques
 
 These techniques are part of systematic debugging and available in this directory:
 
-- **`root-cause-tracing.md`** - Trace bugs backward through call stack to find original trigger
-- **`defense-in-depth.md`** - Add validation at multiple layers after finding root cause
-- **`condition-based-waiting.md`** - Replace arbitrary timeouts with condition polling
+- [Root-cause tracing](root-cause-tracing.md) - Trace bugs backward to the original trigger
+- [Defense in depth](defense-in-depth.md) - Validate relevant trust boundaries after finding the cause
+- [Condition-based waiting](condition-based-waiting.md) - Replace arbitrary sleeps with bounded condition waits
 
 **Related skills:**
 - **superpowers:test-driven-development** - For creating failing test case (Phase 4, Step 1)
 - **superpowers:verification-before-completion** - Verify fix worked before claiming success
 
-## Real-World Impact
+## Measuring impact
 
-From debugging sessions:
-- Systematic approach: 15-30 minutes to fix
-- Random fixes approach: 2-3 hours of thrashing
-- First-time fix rate: 95% vs 40%
-- New bugs introduced: Near zero vs common
+Record time to reproduce, time to a verified fix, retries and escaped regressions for the actual project. No fixed speedup, success rate or absence of new bugs is guaranteed by this workflow.

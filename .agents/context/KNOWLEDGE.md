@@ -1,0 +1,2 @@
+
+- Final 2026-10-20 matched two-frame 1080p-to-4K SR+NR comparison: isolated median 35.080797 s (0.057011 source FPS), persistent NR 25.787219 s (0.077558 source FPS), three samples each and one warmup. Observed 1.36x complete-node throughput; target 4K/>30 failed. NR median 16.897904 to 9.623545 s; unchanged SR also varied 14.344571 to 11.230137 s, so do not attribute every saved second to NR. Full offline suite 317 passed / 5 skipped; explicit seven-case native comparison passed with max error 0.

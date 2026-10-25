@@ -8,7 +8,7 @@ description: Build or sharpen a project's domain language and durable decisions.
 Build the model actively: challenge terms, test relationships with concrete scenarios, compare the
 stated behavior with code, and record a term when it becomes settled.
 
-Yoke stores durable context under `.yoke/context/`:
+Project context is stored `.agents/context/`:
 
 - `GLOSSARY.md` is the canonical language for a single domain context.
 - `CONTEXT-MAP.md` is optional and maps multiple domain contexts plus their relationships.

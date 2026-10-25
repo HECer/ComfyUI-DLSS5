@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.5.0] - 2026-10-25 (Experimental Preview)
+
+### Added
+
+- Choose Depth Anything V2, optional YOLO26 Nano/Small, or Video Depth Anything
+  guides with English model explanations, input-size and precision controls.
+- Override Easy Pipeline depth and motion choices while retaining existing defaults.
+- Reuse matching Neural Rendering initialization with the optional persistent NR
+  worker. SR stays isolated because reused SR features failed numerical equivalence.
+
+### Changed
+
+- Measured 1.36x complete-node throughput in three two-frame samples per mode on
+  RTX 5090: 0.0570 to 0.0776 source FPS at 4K output. The >30 source FPS target
+  remains unmet; decoding, queue wait and encoding are outside this measurement.
+- Documented setup, licensing, source-fingerprinted benchmarks and the seven
+  pixel-identical native comparison cases. TensorRT execution and representative
+  video/perceptual validation remain unverified.
+- Updated repository agent tooling/context; these development files are excluded
+  from installed Registry packages.
+
+### Fixed
+
+- Materialize and validate bundled Git LFS runtime binaries before Registry
+  publication; avoid the composite publisher's additional checkout without LFS.
+- Exclude local agent/test state from release packages and keep the new native
+  helper modules in the installed archive.
+
 ## [0.4.0] - 2026-09-11
 
 ### Added

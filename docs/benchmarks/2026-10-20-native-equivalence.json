@@ -1,0 +1,94 @@
+{
+  "cases": [
+    {
+      "case": "A",
+      "shape": [
+        2,
+        2160,
+        3840,
+        3
+      ],
+      "max_abs_error": 0.0,
+      "seconds": 24.546604199989815,
+      "report": "DLSS-NR 310.8 Feature 18; 3840x2160; 2 frame(s); temporal=yes; guides=depth+motion; native_mode=Persistent NR worker (reuse initialization); initialization=created"
+    },
+    {
+      "case": "B",
+      "shape": [
+        2,
+        2160,
+        3840,
+        3
+      ],
+      "max_abs_error": 0.0,
+      "seconds": 11.712974499998381,
+      "report": "DLSS-NR 310.8 Feature 18; 3840x2160; 2 frame(s); temporal=yes; guides=depth+motion; native_mode=Persistent NR worker (reuse initialization); initialization=reused"
+    },
+    {
+      "case": "A_again",
+      "shape": [
+        2,
+        2160,
+        3840,
+        3
+      ],
+      "max_abs_error": 0.0,
+      "seconds": 11.40046849999635,
+      "report": "DLSS-NR 310.8 Feature 18; 3840x2160; 2 frame(s); temporal=yes; guides=depth+motion; native_mode=Persistent NR worker (reuse initialization); initialization=reused"
+    },
+    {
+      "case": "still",
+      "shape": [
+        1,
+        2160,
+        3840,
+        3
+      ],
+      "max_abs_error": 0.0,
+      "seconds": 8.700944099997287,
+      "report": "DLSS-NR 310.8 Feature 18; 3840x2160; 1 frame(s); temporal=still-baseline; guides=depth+motion; native_mode=Persistent NR worker (reuse initialization); initialization=reused"
+    },
+    {
+      "case": "after_still",
+      "shape": [
+        2,
+        2160,
+        3840,
+        3
+      ],
+      "max_abs_error": 0.0,
+      "seconds": 11.15390990000742,
+      "report": "DLSS-NR 310.8 Feature 18; 3840x2160; 2 frame(s); temporal=yes; guides=depth+motion; native_mode=Persistent NR worker (reuse initialization); initialization=reused"
+    },
+    {
+      "case": "settings",
+      "shape": [
+        2,
+        2160,
+        3840,
+        3
+      ],
+      "max_abs_error": 0.0,
+      "seconds": 23.37319660000503,
+      "report": "DLSS-NR 310.8 Feature 18; 3840x2160; 2 frame(s); temporal=yes; guides=depth+motion; native_mode=Persistent NR worker (reuse initialization); initialization=created"
+    },
+    {
+      "case": "shape",
+      "shape": [
+        2,
+        1080,
+        1920,
+        3
+      ],
+      "max_abs_error": 0.0,
+      "seconds": 15.260734800001956,
+      "report": "DLSS-NR 310.8 Feature 18; 1920x1080; 2 frame(s); temporal=yes; guides=depth+motion; native_mode=Persistent NR worker (reuse initialization); initialization=created"
+    }
+  ],
+  "source_fingerprint": {
+    "nodes.py": "ba0fdd1d51428208d60be2676797bed7c59592da36c439c30edddf6c6115dc2b",
+    "bridge_runner.py": "055b0d4afd28490531c4f741f1209aaa08944745573808e94de3eebec2a49c54",
+    "native_session.py": "f2a66bd86ad861022ba890993d0fecfcc3ca97c5150068cd0801875b5ff7cded",
+    "native_worker.py": "ac629c2b2d23bcaa13cee4a7ee80a9c1b897fd7feb853953b1c73f4ce0a585d6"
+  }
+}

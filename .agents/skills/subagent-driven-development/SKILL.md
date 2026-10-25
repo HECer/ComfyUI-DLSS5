@@ -5,6 +5,10 @@ description: Use when executing implementation plans with independent tasks in t
 
 # Subagent-Driven Development
 
+## Host capability and budget check
+
+Use this workflow only if native delegation is available and authorized. Do not invent a `Task` or `TodoWrite` tool on hosts that lack it. Pi has no built-in subagents; use `executing-plans` or work serially instead. When running as a subagent, do not start nested agents or loops; return evidence to the coordinating agent. Independent review must not be replaced by claiming a self-review was independent.
+
 Execute plan by dispatching fresh subagent per task, with two-stage review after each: spec compliance review first, then code quality review.
 
 **Why subagents:** You delegate tasks to specialized agents with isolated context. By precisely crafting their instructions and context, you ensure they stay focused and succeed at their task. They should never inherit your session's context or history — you construct exactly what they need. This also preserves your own context for coordination work.
@@ -119,9 +123,9 @@ Implementer subagents report one of four statuses. Handle each appropriately:
 
 ## Prompt Templates
 
-- `./implementer-prompt.md` - Dispatch implementer subagent
-- `./spec-reviewer-prompt.md` - Dispatch spec compliance reviewer subagent
-- `./code-quality-reviewer-prompt.md` - Dispatch code quality reviewer subagent
+- [Implementer prompt](./implementer-prompt.md) - Dispatch implementer subagent
+- [Spec reviewer prompt](./spec-reviewer-prompt.md) - Dispatch spec compliance reviewer subagent
+- [Code quality reviewer prompt](./code-quality-reviewer-prompt.md) - Dispatch code quality reviewer subagent
 
 ## Example Workflow
 

@@ -15,6 +15,7 @@ import time
 
 import pytest
 import torch
+import numpy.testing  # Load platform probes before tests replace subprocess.run.
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -272,6 +273,16 @@ def test_progress_cancel_native_child_lifecycle(monkeypatch, tmp_path, comfy_pro
         ready.append(Path(command[3]).with_suffix(".ready"))
         child = popen([sys.executable, "-c", script, *command[1:]], **kwargs)
         children.append(child)
+        if ending == "timeout":
+            # This case tests log collection from a running child. The separate
+            # startup/kill test covers timing out before a child emits anything.
+            deadline = time.monotonic() + 3
+            while not ready[-1].exists() and child.poll() is None and time.monotonic() < deadline:
+                time.sleep(0.01)
+            if not ready[-1].exists():
+                child.kill()
+                child.wait()
+                pytest.fail("Child did not reach the log-collection readiness marker")
         return child
 
     def check():
@@ -418,6 +429,8 @@ def test_progress_cancel_bridge_emits_real_frame_protocol(monkeypatch, tmp_path,
     import numpy as np
 
     class Clip:
+        width = height = 8 if stage == "sr" else 4
+
         def get_frame(self, index):
             size = 8 if stage == "sr" else 4
             return [np.full((size, size), index / 10, dtype=np.float32)] * 3
@@ -661,7 +674,11 @@ def test_truthful_presets_preserve_baseline_defaults():
         preset = nodes._easy_preset(scenario)
         assert {key: value for key, value in preset.items() if key != "scenario"} == baseline._easy_preset(scenario)
     assert nodes.DLSS5EasyPipeline.LOOKS == baseline.DLSS5EasyPipeline.LOOKS
-    assert _schema_contract(nodes.DLSS5EasyPipeline) == _schema_contract(baseline.DLSS5EasyPipeline)
+    assert _schema_contract(nodes.DLSS5EasyPipeline)["required"] == _schema_contract(baseline.DLSS5EasyPipeline)["required"]
+    optional = nodes.DLSS5EasyPipeline.INPUT_TYPES()["optional"]
+    assert optional["depth_model"][0][0] == optional["motion_model"][0][0] == "Preset (unchanged)"
+    assert optional["depth_input_size"][1]["default"] == optional["motion_input_size"][1]["default"] == 0
+    assert optional["depth_precision"][0][0] == "FP32"
 
 
 def test_config_roundtrip_reads_utf8_with_or_without_bom(monkeypatch, tmp_path):
@@ -1421,22 +1438,35 @@ def test_node_help_effect_mask_does_not_disable_automatic_masking():
 
 def test_integration_regression_workflow_compatibility_preserves_baseline_contracts_and_groups_nodes():
     baseline = _baseline_nodes()
-    assert list(nodes.NODE_CLASS_MAPPINGS) == list(baseline.NODE_CLASS_MAPPINGS)
-    assert nodes.NODE_DISPLAY_NAME_MAPPINGS == baseline.NODE_DISPLAY_NAME_MAPPINGS
+    assert list(nodes.NODE_CLASS_MAPPINGS) == [*baseline.NODE_CLASS_MAPPINGS, "DLSS5DepthGuide"]
+    assert {key: nodes.NODE_DISPLAY_NAME_MAPPINGS[key] for key in baseline.NODE_DISPLAY_NAME_MAPPINGS} == baseline.NODE_DISPLAY_NAME_MAPPINGS
 
-    for node_id, node_class in nodes.NODE_CLASS_MAPPINGS.items():
-        prior = baseline.NODE_CLASS_MAPPINGS[node_id]
+    additions = {
+        "DLSS5EasyPipeline": ["depth_model", "depth_input_size", "depth_precision", "motion_model", "motion_input_size", "native_mode"],
+        "DLSS5FullPipeline": ["native_mode"],
+        "DLSS5NeuralRendering": ["native_mode"],
+        "DLSS5DepthAnythingV2": ["input_size", "precision"],
+    }
+    for node_id, prior in baseline.NODE_CLASS_MAPPINGS.items():
+        node_class = nodes.NODE_CLASS_MAPPINGS[node_id]
         current_contract = _schema_contract(node_class)
         baseline_contract = _schema_contract(prior)
+        if node_id in additions:
+            existing = baseline_contract.get("optional", {})
+            assert list(current_contract["optional"]) == [*existing, *additions[node_id]]
+            for name in additions[node_id]:
+                current_contract["optional"].pop(name)
+            if not existing:
+                current_contract.pop("optional")
         if node_id == "DLSS5RuntimeSetup":
             current_actions = current_contract["required"]["action"][0]
             baseline_actions = baseline_contract["required"]["action"][0]
             assert current_actions[: len(baseline_actions)] == baseline_actions
             baseline_contract["required"]["action"] = current_contract["required"]["action"]
         assert current_contract == baseline_contract
-        assert list(node_class.INPUT_TYPES().keys()) == list(prior.INPUT_TYPES().keys())
-        for group in node_class.INPUT_TYPES():
-            assert list(node_class.INPUT_TYPES()[group]) == list(prior.INPUT_TYPES()[group])
+        assert list(node_class.INPUT_TYPES()) == [*prior.INPUT_TYPES(), *(["optional"] if node_id in additions and "optional" not in prior.INPUT_TYPES() else [])]
+        for group in prior.INPUT_TYPES():
+            assert list(node_class.INPUT_TYPES()[group]) == [*prior.INPUT_TYPES()[group], *(additions.get(node_id, []) if group == "optional" else [])]
         assert node_class.RETURN_TYPES == prior.RETURN_TYPES
         assert getattr(node_class, "RETURN_NAMES", None) == getattr(prior, "RETURN_NAMES", None)
         assert node_class.FUNCTION == prior.FUNCTION
@@ -1746,3 +1776,38 @@ assert.equal(Unrelated.prototype.onExecuted, undefined);
     result = subprocess.run(['node', '--input-type=module', '-e', script], cwd=ROOT,
                             capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("operation", ["Upscale only", "Neural rendering only", "Upscale + neural rendering"])
+def test_native_worker_option_reaches_every_easy_stage(monkeypatch, easy_native_fakes, operation):
+    selected = "Persistent NR worker (reuse initialization)"
+    calls=[]
+    for cls, method in ((nodes.DLSSSuperResolution,"upscale"),(nodes.DLSS5NeuralRendering,"render")):
+        original=getattr(cls,method)
+        def wrap(*args, _original=original, **kwargs):
+            calls.append((_original.__name__,kwargs.pop("native_mode",None)))
+            return _original(*args,**kwargs)
+        monkeypatch.setattr(cls,method,wrap)
+    image=torch.zeros(25,2,3,3)
+    output,report=nodes.DLSS5EasyPipeline().run(image,"Fast preview",operation,"2x","Quality","Neutral / faithful",.85,native_mode=selected)
+    assert calls and all(value==(selected if method=="render" else None) for method,value in calls)
+    assert output.shape[0]==25
+    for cls in (nodes.DLSS5NeuralRendering,nodes.DLSS5FullPipeline,nodes.DLSS5EasyPipeline):
+        spec=cls.INPUT_TYPES()["optional"]["native_mode"]
+        assert spec[0]==["Isolated process (compatible)",selected]
+        assert "120" in spec[1]["tooltip"] and "history" in spec[1]["tooltip"]
+
+
+def test_native_dispatch_preserves_default_and_forwards_cancellation(monkeypatch):
+    calls=[]
+    monkeypatch.setattr(nodes,"_run_process",lambda command,timeout: calls.append("isolated") or "old")
+    def worker(command,timeout,check_cancel,progress):
+        calls.append("worker")
+        check_cancel(); progress(1,2)
+        return "new"
+    monkeypatch.setattr(nodes,"run_worker",worker)
+    assert nodes._run_native_process(["unused"],3,"Isolated process (compatible)")=="old"
+    assert nodes._run_native_process(["unused"],3,"Persistent NR worker (reuse initialization)")=="new"
+    assert calls==["isolated","worker"]
+    with pytest.raises(ValueError):
+        nodes._run_native_process(["unused"],3,"typo")

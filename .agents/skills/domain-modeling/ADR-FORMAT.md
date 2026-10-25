@@ -1,6 +1,6 @@
 # ADR-class decision format
 
-Append a concise entry to `.yoke/context/DECISIONS.md` only when the choice is:
+Append a concise entry to `.agents/context/DECISIONS.md` only when the choice is:
 
 1. hard to reverse;
 2. surprising without context; and

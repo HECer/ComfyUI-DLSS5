@@ -6,8 +6,7 @@ description: Use when a task has efficiency requirements or touches a hot path �
 # Performance (measured, not vibed)
 
 "Efficient" is a requirement, not a code style. Untested performance claims rot exactly like
-untested behavior claims. This skill makes efficiency mechanical — the same move Yoke makes
-for everything else.
+untested behavior claims. Apply the same evidence standard to speed, memory, and storage claims.
 
 ## The decision ladder
 
@@ -18,7 +17,6 @@ for everything else.
    - Good: "imports 1M rows in < 2s", "p95 request latency < 50ms in the bench test",
      "no allocation inside the render loop (verified by the bench assertion)"
    - Bad: "should be fast", "optimize the importer"
-3. **Whole-project budget? Use the perf gate.** Set `perf.command` in `.yoke/config.yaml`
    (a benchmark script; exit 0 = within budget). The loop runs it after verify — a story
    that breaks the budget is blocked, no matter how clean its diff is.
 

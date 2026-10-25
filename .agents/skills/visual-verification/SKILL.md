@@ -1,54 +1,32 @@
 ---
 name: visual-verification
-description: Use for any UI/web project — make the verify gate cover more than unit tests by composing a pipeline (types → unit → design-scan → flow-smoke) and running the built-in yoke flow-smoke gate (landmark + zero console errors + screenshot proof to .yoke/proof/<story>/, video kept on failure). Catches the unwired-page / runtime-crash / AI-slop bugs unit tests miss.
+description: Use for UI or web changes that need browser-level checks in addition to code-level verification.
 ---
 
 # Visual verification
 
-Unit tests don't see a blank page, an unwired route, a runtime console error, or AI-slop design.
-Make the loop's gate catch them by widening `verify`, since the loop trusts verify as truth.
+Unit tests can miss a blank page, a broken route, a runtime console error, or a visual regression.
+Use the project's existing tools to check affected user flows when browser verification is
+requested or required by the project.
 
-## 1. Compose the verify pipeline
+## 1. Use configured checks
 
-Set `verify.command` (in `.yoke/config.yaml`) to chain, fail-fast:
+Inspect the project scripts and existing browser-test setup. Reuse configured type, unit, design,
+accessibility, and browser-flow checks that apply to the change. Do not invent command names or add
+test dependencies as part of this skill.
 
-```
-<typecheck> && <unit tests> && yoke design-scan . && yoke flow-smoke .
-```
-e.g. `tsc --noEmit && vitest run && yoke design-scan . && yoke flow-smoke .`. Any red step blocks the story.
+## 2. Check affected flows
 
-## 2. Flow-smoke with the built-in gate
+If browser automation is already configured, start the app and verify the changed routes and key
+interactions. Check that the page renders, expected landmarks are visible, and the browser console
+has no new errors.
 
-Configure the key user flows once in `.yoke/config.yaml`:
+## 3. Capture useful evidence
 
-```yaml
-smoke:
-  baseUrl: http://localhost:3000
-  flows:
-    - name: home
-      path: /
-      landmark: "main h1"
-    - name: login
-      path: /login
-      landmark: "form"
-```
-
-With that in place, the `yoke flow-smoke .` step from the section-1 pipeline is live.
-`yoke flow-smoke` loads each route against the running dev server, waits for the landmark,
-fails on any console error, and **always** saves a screenshot to `.yoke/proof/<story>/`
-(the loop labels the folder with the current story id via `YOKE_STORY`; standalone runs use
-`latest`, or pass `--label=`). Requires Playwright in the project:
-`npm i -D playwright && npx playwright install chromium`. Start the dev server before verify
-(e.g. via `start-server-and-test`).
-
-## 3. Video only when necessary
-
-`yoke flow-smoke` records video per flow and keeps it **only on failure**
-(`.yoke/proof/<story>/<flow>.webm`). When a flow goes red: watch that clip first, then use the
-wired Playwright MCP to reproduce interactively. Never record every run manually — the gate
-already handles the failure case.
+Capture a screenshot or short recording when it helps explain a visual result or reproduce a
+failure. Save it to the project's established evidence location; otherwise use a temporary folder.
 
 ## Rule
 
-Green pipeline = types + units + no design-slop over budget + every flow renders without
-console errors, with a screenshot to prove it. Only then is the story actually done.
+Report which configured checks ran, which flows were inspected, and any remaining visual or runtime
+issues. Do not claim browser verification when no browser check ran.

@@ -17,6 +17,8 @@ import torch.nn.functional as F
 
 try:
     from .dlssg_backend import DLSSGSession, hags_enabled, probe_worker
+    from .depth_backend import infer_yolo_depth
+    from .native_session import run_worker
 except ImportError:
     import importlib.util
 
@@ -28,12 +30,26 @@ except ImportError:
     DLSSGSession = _DLSSG_MODULE.DLSSGSession
     hags_enabled = _DLSSG_MODULE.hags_enabled
     probe_worker = _DLSSG_MODULE.probe_worker
+    _DEPTH_SPEC = importlib.util.spec_from_file_location(
+        "depth_backend", Path(__file__).resolve().with_name("depth_backend.py")
+    )
+    _DEPTH_MODULE = importlib.util.module_from_spec(_DEPTH_SPEC)
+    _DEPTH_SPEC.loader.exec_module(_DEPTH_MODULE)
+    infer_yolo_depth = _DEPTH_MODULE.infer_yolo_depth
+    _NATIVE_SPEC = importlib.util.spec_from_file_location(
+        "native_session", Path(__file__).resolve().with_name("native_session.py")
+    )
+    _NATIVE_MODULE = importlib.util.module_from_spec(_NATIVE_SPEC)
+    _NATIVE_SPEC.loader.exec_module(_NATIVE_MODULE)
+    run_worker = _NATIVE_MODULE.run_worker
 
 
 PACKAGE = Path(__file__).resolve().parent
 PROJECT = PACKAGE.parent
 _DEPTH_CACHE = {}
 _RAFT_CACHE = {}
+NATIVE_MODES = ["Isolated process (compatible)", "Persistent NR worker (reuse initialization)"]
+NATIVE_MODE_INPUT = (NATIVE_MODES, {"tooltip": "Isolated process preserves the existing path. Persistent NR worker reuses NR initialization for matching settings; each sequence resets temporal history. SR stays isolated to preserve independent-sequence output. Ignored for Upscale only. First use still initializes. Retains GPU resources until 120 seconds idle; cancel, timeout or failure discards the worker. Measure total pipeline FPS."})
 
 
 def _check_cancel():
@@ -104,6 +120,28 @@ def _run_process(command, timeout=None):
                     except subprocess.TimeoutExpired:
                         process.kill()
                 process.wait()
+
+
+def _run_native_process(command, timeout, native_mode):
+    if native_mode == NATIVE_MODES[0]:
+        return _run_process(command, timeout=timeout)
+    if native_mode != NATIVE_MODES[1]:
+        raise ValueError("Unknown native mode.")
+    progress = None
+    def update(value, total):
+        nonlocal progress
+        if progress is None:
+            progress = _Progress(total)
+        progress.update(value)
+    return run_worker(command, timeout=timeout, check_cancel=_check_cancel, progress=update)
+
+
+def _native_report(process, native_mode):
+    if native_mode == NATIVE_MODES[0]:
+        return ""
+    result = next(line for line in reversed(process.stdout.splitlines()) if line.startswith("DLSS_RESULT "))
+    reused = json.loads(result.split(" ", 2)[2])["reused"]
+    return f"; native_mode={native_mode}; initialization={'reused' if reused else 'created'}"
 
 
 def _easy_memory_advice(shape, operation, scale, preset):
@@ -840,7 +878,8 @@ class DLSS5FullPipeline:
                 "skin_structure": ("FLOAT", {"default": -1.0, "min": -1.0, "max": 2.0, "tooltip": "-1 delegates skin structure to the runtime; non-negative values override it."}),
                 "auto_mask": ("BOOLEAN", {"default": True, "tooltip": "Lets the runtime generate a mask when no explicit effect mask is used."}),
                 "depth_inverted": ("BOOLEAN", {"default": False, "tooltip": "Enable only when the supplied depth guide uses the opposite near/far convention."}),
-            }
+            },
+            "optional": {"native_mode": NATIVE_MODE_INPUT},
         }
 
     RETURN_TYPES = ("IMAGE", "STRING")
@@ -865,7 +904,9 @@ class DLSS5FullPipeline:
         skin_structure,
         auto_mask,
         depth_inverted,
+        native_mode=NATIVE_MODES[0],
     ):
+        native_options = {} if native_mode == NATIVE_MODES[0] else {"native_mode": native_mode}
         output = None
         reports = []
         window_count = 1 if processing_mode == "Persistent full sequence" else (image.shape[0] + chunk_size - 1) // chunk_size
@@ -890,6 +931,7 @@ class DLSS5FullPipeline:
                 depth_inverted,
                 depth=depth[sl],
                 motion_vectors=motion_vectors[sl],
+                **native_options,
             )
             progress.update(index * 2 + 2)
             output = (
@@ -940,7 +982,15 @@ class DLSS5EasyPipeline:
                     "FLOAT",
                     {"default": 0.85, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "Blends the selected Easy look; ignored for Upscale only."},
                 ),
-            }
+            },
+            "optional": {
+                "depth_model": (["Preset (unchanged)", *DLSS5DepthGuide.MODEL_HELP], {"tooltip": DLSS5DepthGuide.model_tooltip()}),
+                "depth_input_size": ("INT", {"default": 0, "min": 0, "max": 1536, "step": 14, "tooltip": DLSS5DepthGuide.SIZE_HELP}),
+                "depth_precision": (["FP32", "FP16"], {"tooltip": "FP32 preserves legacy depth behavior. FP16 accelerates CUDA inference; CPU uses FP32."}),
+                "motion_model": (["Preset (unchanged)", "Optical Flow (fastest)", "RAFT Small (fast)", "RAFT Large (best)"], {"tooltip": "Override preset motion estimation. Optical Flow uses CPU Farneback; RAFT uses a neural model and is more expensive. Measure total pipeline speed."}),
+                "motion_input_size": ("INT", {"default": 0, "min": 0, "max": 4096, "tooltip": "0 preserves full-resolution motion. Otherwise cap the motion input's longest side, for example 512. Smaller inputs are faster but lose fine motion; encoded vectors retain full-frame relative units."}),
+                "native_mode": NATIVE_MODE_INPUT,
+            },
         }
 
     RETURN_TYPES = ("IMAGE", "STRING")
@@ -948,7 +998,10 @@ class DLSS5EasyPipeline:
     FUNCTION = "run"
     CATEGORY = "Experimental DLSS Bridge"
 
-    def run(self, image, scenario, operation, scale, quality, look, effect_strength):
+    def run(self, image, scenario, operation, scale, quality, look, effect_strength,
+            depth_model="Preset (unchanged)", depth_input_size=0, depth_precision="FP32",
+            motion_model="Preset (unchanged)", motion_input_size=0, native_mode=NATIVE_MODES[0]):
+        native_options = {} if native_mode == NATIVE_MODES[0] else {"native_mode": native_mode}
         stages = {
             "Upscale only": ("sr",),
             "Neural rendering only": ("nr",),
@@ -958,19 +1011,40 @@ class DLSS5EasyPipeline:
         if not passed:
             raise RuntimeError("DLSS Easy preflight failed:\n" + diagnostic)
         preset = _easy_preset(scenario, int(image.shape[0]))
+        if motion_model != "Preset (unchanged)":
+            if motion_model not in ("Optical Flow (fastest)", "RAFT Small (fast)", "RAFT Large (best)"):
+                raise ValueError("Unknown motion model.")
+            preset["flow_model"] = motion_model
         advice = _easy_memory_advice(image.shape, operation, scale, preset)
         print(advice, flush=True)
         progress = _Progress(4)
-        depth = DLSS5DepthAnythingV2().estimate(image, "Small (recommended)", True, 4)[
-            0
-        ]
+        depth_report = "Depth Anything V2 Small; precision=FP32; input_size=native"
+        if depth_model == "Preset (unchanged)" and depth_input_size == 0 and depth_precision == "FP32":
+            depth = DLSS5DepthAnythingV2().estimate(image, "Small (recommended)", True, 4)[0]
+        else:
+            selected = "Depth Anything V2 Small" if depth_model == "Preset (unchanged)" else depth_model
+            depth, depth_report = DLSS5DepthGuide().estimate(
+                image, selected, depth_input_size, depth_precision, True, 4)
+            depth_report = f"{selected}; {depth_report}"
         progress.update(1)
+        motion_source = image
+        if motion_input_size < 0:
+            raise ValueError("motion_input_size must be nonnegative.")
+        if 0 < motion_input_size < max(image.shape[1:3]):
+            ratio = motion_input_size / max(image.shape[1:3])
+            size = tuple(max(1, round(d * ratio)) for d in image.shape[1:3])
+            motion_source = F.interpolate(image.permute(0, 3, 1, 2), size=size,
+                                          mode="bilinear", align_corners=False).permute(0, 2, 3, 1)
         if preset["flow_model"] == "Optical Flow (fastest)":
-            motion = DLSS5OpticalFlow().estimate(image, 0.5, 5, 21)[0]
+            motion = DLSS5OpticalFlow().estimate(motion_source, 0.5, 5, 21)[0]
         else:
             motion = DLSS5RAFTFlow().estimate(
-                image, preset["flow_model"], preset["flow_chunk"]
+                motion_source, preset["flow_model"], preset["flow_chunk"]
             )[0]
+        if motion_source is not image:
+            # Relative motion encoding is resolution independent; do not scale its values again.
+            motion = F.interpolate(motion.permute(0, 3, 1, 2), size=image.shape[1:3],
+                                   mode="bilinear", align_corners=False).permute(0, 2, 3, 1)
         progress.update(2)
         if image.shape[0] > 1:
             depth = DLSS5TemporalDepthStabilize().stabilize(depth, motion, 0.7, 0.08)[0]
@@ -993,6 +1067,7 @@ class DLSS5EasyPipeline:
                 skin_structure,
                 True,
                 True,
+                **native_options,
             )
         else:
             output = None
@@ -1023,6 +1098,7 @@ class DLSS5EasyPipeline:
                         True,
                         depth=frame_depth,
                         motion_vectors=frame_motion,
+                        **native_options,
                     )
                 native_progress.update(stop)
                 output = out if output is None else _overlap_add(output, out, preset["overlap"])
@@ -1030,7 +1106,8 @@ class DLSS5EasyPipeline:
             report = "\n".join(reports)
         summary = (
             f"Easy preset: {preset['scenario']}; requested={scenario}; "
-            f"guide={preset['flow_model']}; depth=Depth Anything V2 Small; "
+            f"guide={preset['flow_model']}; depth={depth_report}; "
+            f"motion_input={motion_source.shape[2]}x{motion_source.shape[1]}; "
             f"operation={operation}; mode={preset['processing_mode']}; "
             f"input={image.shape[0]} frames {image.shape[2]}x{image.shape[1]}; "
             f"output={output.shape[0]} frames {output.shape[2]}x{output.shape[1]}\n"
@@ -1084,6 +1161,7 @@ class DLSS5NeuralRendering:
                 "effect_mask": ("MASK", {"tooltip": "Optional mask that limits Neural Rendering to selected image areas."}),
                 "depth": ("IMAGE", {"tooltip": "Optional depth guide; connect it only together with motion_vectors."}),
                 "motion_vectors": ("IMAGE", {"tooltip": "Optional current-to-previous motion guide; connect it only together with depth."}),
+                "native_mode": NATIVE_MODE_INPUT,
             },
         }
 
@@ -1105,6 +1183,7 @@ class DLSS5NeuralRendering:
         effect_mask=None,
         depth=None,
         motion_vectors=None,
+        native_mode=NATIVE_MODES[0],
     ):
         python, plugin, snippet = _runtime_paths()
         source = image.detach().to(device="cpu", dtype=torch.float32)
@@ -1148,7 +1227,7 @@ class DLSS5NeuralRendering:
                     depth, motion_vectors, guide_size, depth_path, motion_path
                 )
                 command += ["--depth", str(depth_path), "--mvec", str(motion_path)]
-            process = _run_process(command, timeout=_runtime_timeout())
+            process = _run_native_process(command, _runtime_timeout(), native_mode)
             if process.returncode:
                 raise RuntimeError("DLSS 5 failed:\n" + process.stdout + process.stderr)
             result = torch.from_numpy(np.load(output_path))
@@ -1171,7 +1250,7 @@ class DLSS5NeuralRendering:
             f"{result.shape[0]} frame(s); temporal={'yes' if result.shape[0] > 1 else 'still-baseline'}; "
             f"guides={'depth+motion' if depth is not None else 'none'}"
         )
-        return (result.to(image.device), report)
+        return (result.to(image.device), report + _native_report(process, native_mode))
 
 
 class DLSS5OpticalFlow:
@@ -1409,7 +1488,11 @@ class DLSS5DepthAnythingV2:
                 "model": (list(cls.MODELS), {"tooltip": "Depth Anything V2 model; its weights download on first use."}),
                 "temporal_normalization": ("BOOLEAN", {"default": True, "tooltip": "Uses one depth range across the sequence to reduce temporal flicker."}),
                 "chunk_size": ("INT", {"default": 4, "min": 1, "max": 32, "tooltip": "Frames estimated together; reduce it when memory is limited."}),
-            }
+            },
+            "optional": {
+                "input_size": ("INT", {"default": 0, "min": 0, "max": 1536, "step": 14, "tooltip": "0 preserves the model's native preprocessing (518). Try 280 or 392 for faster guides with less detail; dimensions round to multiples of 14."}),
+                "precision": (["FP32", "FP16"], {"tooltip": "FP32 preserves legacy inference. FP16 uses CUDA autocast for speed; CPU inference remains FP32."}),
+            },
         }
 
     RETURN_TYPES = ("IMAGE",)
@@ -1417,7 +1500,9 @@ class DLSS5DepthAnythingV2:
     FUNCTION = "estimate"
     CATEGORY = "Experimental DLSS Bridge/guides"
 
-    def estimate(self, images, model, temporal_normalization, chunk_size):
+    def estimate(self, images, model, temporal_normalization, chunk_size, input_size=0, precision="FP32"):
+        if precision not in ("FP32", "FP16") or input_size < 0 or chunk_size < 1 or len(images) < 1:
+            raise ValueError("Invalid depth precision, input size, chunk size or empty frame sequence.")
         progress = _Progress(images.shape[0])
         from transformers import AutoImageProcessor, AutoModelForDepthEstimation
 
@@ -1447,9 +1532,12 @@ class DLSS5DepthAnythingV2:
                         for frame in frames
                     ],
                     return_tensors="pt",
+                    **({"size": {"height": input_size, "width": input_size}} if input_size else {}),
                 )
                 inputs = {name: value.to(device) for name, value in inputs.items()}
-                part = network(**inputs).predicted_depth[:, None]
+                with torch.autocast(device_type=device.type, dtype=torch.float16,
+                                    enabled=precision == "FP16" and device.type == "cuda"):
+                    part = network(**inputs).predicted_depth[:, None].float()
                 part = F.interpolate(
                     part, size=source.shape[1:3], mode="bicubic", align_corners=False
                 )[:, 0]
@@ -1468,6 +1556,79 @@ class DLSS5DepthAnythingV2:
             depth = (depth - low) / (high - low).clamp_min(1e-6)
         depth = depth.clamp(0, 1)[..., None].expand(-1, -1, -1, 3)
         return (depth.to(images.device),)
+
+
+class DLSS5DepthGuide:
+    DESCRIPTION = "Select a depth model for DLSS guides. Compare speed, detail and temporal behavior in the model tooltip. Faster model inference does not guarantee real-time 4K processing. The model_info output reports the selection and effective precision."
+    MODEL_HELP = {
+        "Depth Anything V2 Small": "Balanced general-purpose inverse depth; established default, 24.8M parameters. Single-frame estimates can flicker; temporal normalization shares the range. Downloads on first use.",
+        "Depth Anything V2 Base": "Larger single-frame model for detail comparisons; slower and uses more VRAM than Small. No intrinsic video consistency. Downloads on first use; checkpoint has noncommercial terms.",
+        "Depth Anything V2 Large": "Largest DA-V2 option here; detail-oriented, slower and more memory intensive. No intrinsic video consistency. Downloads on first use; checkpoint has noncommercial terms.",
+        "YOLO26 Nano (optional)": "Speed-first depth, 6.3M parameters; lower detail and no intrinsic temporal consistency. Requires optional Ultralytics with depth support (AGPL-3.0). Official weights download on first use. TensorRT timings are not PyTorch or pipeline timings.",
+        "YOLO26 Small (optional)": "More detail than Nano at higher cost, 13.2M parameters; no intrinsic temporal consistency. Requires optional Ultralytics with depth support (AGPL-3.0). Official weights download on first use.",
+        "Video Depth Anything Small": "Temporal depth model for video consistency, 28.4M parameters. Requires its optional source/checkpoint download. More temporal context and memory than single-frame guides; test speed on your clip.",
+    }
+    SIZE_HELP = "0 uses the model default (DA-V2/VDA: 518; YOLO: 768). Smaller sizes trade detail for speed. DA/VDA sizes target the short side; YOLO targets the long side and rounds up to 32. Output matches the source resolution."
+
+    @classmethod
+    def model_tooltip(cls):
+        return "Preset preserves Easy defaults.\n" + "\n".join(f"{name}: {help_text}" for name, help_text in cls.MODEL_HELP.items())
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {
+            "images": ("IMAGE", {"tooltip": "Input image or frame sequence. Guides are returned at this resolution."}),
+            "model": (list(cls.MODEL_HELP), {"tooltip": cls.model_tooltip()}),
+            "input_size": ("INT", {"default": 0, "min": 0, "max": 1536, "step": 14, "tooltip": cls.SIZE_HELP}),
+            "precision": (["FP16", "FP32"], {"tooltip": "FP16 accelerates CUDA inference. On CPU the effective precision is FP32 and is reported."}),
+            "temporal_normalization": ("BOOLEAN", {"default": True, "tooltip": "Uses one robust depth range across the clip. This reduces range changes but does not provide temporal correspondence for single-frame models. VDA always uses a clip range."}),
+            "chunk_size": ("INT", {"default": 4, "min": 1, "max": 32, "tooltip": "Frames per DA/YOLO inference batch; smaller batches use less memory. VDA manages its own temporal windows."}),
+        }, "optional": {
+            "engine_path": ("STRING", {"default": "", "tooltip": "Optional local TensorRT .engine for the selected YOLO depth model; requires CUDA and compatible Ultralytics/TensorRT. Export on this GPU. Engine precision/shape/batch are fixed by its build; never used for DA/VDA."}),
+        }}
+
+    RETURN_TYPES = ("IMAGE", "STRING")
+    RETURN_NAMES = ("depth", "model_info")
+    FUNCTION = "estimate"
+    CATEGORY = "Experimental DLSS Bridge/guides"
+
+    def estimate(self, images, model, input_size, precision, temporal_normalization, chunk_size,
+                 engine_path=""):
+        if model not in self.MODEL_HELP or precision not in ("FP16", "FP32"):
+            raise ValueError("Unknown depth model or precision.")
+        if engine_path.strip() and not model.startswith("YOLO26"):
+            raise ValueError("engine_path is only supported for YOLO26 depth models.")
+        started = time.perf_counter()
+        if model.startswith("Depth Anything V2"):
+            variant = {"Small": "Small (recommended)", "Base": "Base", "Large": "Large"}[model.split()[-1]]
+            depth, = DLSS5DepthAnythingV2().estimate(
+                images, variant, temporal_normalization, chunk_size,
+                input_size=input_size, precision=precision)
+        elif model.startswith("YOLO26"):
+            progress = _Progress(len(images))
+            depth = infer_yolo_depth(images, "nano" if "Nano" in model else "small",
+                                     input_size, precision, chunk_size, temporal_normalization,
+                                     engine_path=engine_path, check_cancel=_check_cancel,
+                                     progress=progress.update)
+        else:
+            from .video_depth_backend import infer_vda_small
+            progress = _Progress(1)
+            depth = infer_vda_small(images, input_size=input_size or 518, fp32=precision == "FP32")
+            progress.update(1)
+        cuda = images.device.type == "cuda" or torch.cuda.is_available()
+        effective = precision if cuda else "FP32 (CPU)"
+        size = input_size or (768 if model.startswith("YOLO26") else 518)
+        if model.startswith("YOLO26"):
+            size = (size + 31) // 32 * 32
+        mode = "TensorRT engine (precision/shape/batch fixed at export)" if engine_path.strip() else "PyTorch"
+        size_report = (f"requested_input_size={size}; effective_input_size=engine-defined; "
+                       f"engine_path={engine_path}; engine_checkpoint_identity=unverified" if engine_path.strip()
+                       else f"input_size={size}")
+        report = (f"{model}; backend={mode}; requested_precision={precision}; "
+                  f"precision={'engine-defined' if engine_path.strip() else effective}; {size_report}; "
+                  f"frames={len(images)}; elapsed={time.perf_counter() - started:.3f}s "
+                  "(includes first-use setup when needed)\n" + self.MODEL_HELP[model])
+        return depth, report
 
 
 class DLSS5VideoDepthAnything:
@@ -1627,6 +1788,7 @@ NODE_CLASS_MAPPINGS = {
     "DLSS5TemporalDepthStabilize": DLSS5TemporalDepthStabilize,
     "DLSSFrameGeneration": DLSSFrameGeneration,
     "DLSSFrameGenerationStatus": DLSSFrameGenerationStatus,
+    "DLSS5DepthGuide": DLSS5DepthGuide,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "DLSS5RuntimeSetup": "DLSS Runtime Setup (One Click)",
@@ -1643,4 +1805,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "DLSS5TemporalDepthStabilize": "DLSS 5 Temporal Depth Stabilizer",
     "DLSSFrameGeneration": "NVIDIA DLSS Frame Generation (External Worker)",
     "DLSSFrameGenerationStatus": "DLSS Frame Generation Runtime Status",
+    "DLSS5DepthGuide": "DLSS Depth Guide (Model Selection)",
 }

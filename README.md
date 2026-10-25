@@ -1,5 +1,7 @@
 # Experimental DLSS Neural Rendering for ComfyUI
 
+**v0.5.0 Experimental Preview:** selectable guide models and optional persistent NR execution. The measured 4K output throughput remains below 30 source FPS; see [measurements and limits](docs/NATIVE_WORKER.md#matched-local-measurement-on-2026-10-20).
+
 <p align="center">
   <img src="docs/images/icon.png" width="160" alt="Experimental DLSS Neural Rendering project icon">
 </p>
@@ -42,8 +44,13 @@ Use a working Windows ComfyUI installation with an NVIDIA RTX GPU.
    preview at 100%, and use **Save Image** for the result.
 
 The first guide-model run downloads Depth Anything V2 Small on first use. A still uses zero
-motion; video presets use optical flow or RAFT. Easy always uses DA-V2, while
-the temporally consistent VDA model is the separate workflow 04. Use the
+motion; video presets use optical flow or RAFT. Easy uses DA-V2 by default, while
+the temporally consistent VDA model is the separate workflow 04. Optional Easy
+overrides and the new **DLSS Depth Guide (Model Selection)** add YOLO26 Nano/Small,
+model explanations, FP16 and inference-size controls. See
+[fast depth selection and benchmarks](docs/FAST_DEPTH.md). Optional
+[persistent NR execution](docs/NATIVE_WORKER.md) reuses matching NR initialization;
+SR remains isolated and the existing process mode stays the default. Use the
 [troubleshooting guide](docs/TROUBLESHOOTING.md) when a status probe reports
 `FAIL`, `MISSING`, or `LFS POINTER`.
 
@@ -175,6 +182,7 @@ diagnostics, and stuck-process guidance.
 | **DLSS SR + Neural Rendering** | SR followed by NR with persistent or bounded routing |
 | **Easy Upscale & Render** | Preset-based image and video entry point |
 | **Depth Anything V2 Guide** | Pixel-estimated depth with optional temporal normalization |
+| **Depth Guide (Model Selection)** | DA-V2, optional YOLO26 Nano/Small or VDA-S with model explanations and precision/size controls |
 | **Video Depth Anything** | Temporally consistent depth for video windows |
 | **RAFT Motion Guide** | Current-to-previous dense motion for reprojection |
 | **Temporal Depth Stabilizer** | Reprojects and blends depth across frames |
