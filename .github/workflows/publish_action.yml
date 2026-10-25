@@ -16,10 +16,32 @@ jobs:
     name: Publish custom node
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
+      - name: Check out repository with bundled runtimes
         uses: actions/checkout@v4
-
-      - name: Publish package to Comfy Registry
-        uses: Comfy-Org/publish-node-action@v1
         with:
-          personal_access_token: ${{ secrets.REGISTRY_ACCESS_TOKEN }}
+          lfs: true
+
+      - name: Verify bundled runtime payloads
+        run: |
+          git lfs fsck
+          python - <<'PY'
+          from pathlib import Path
+          for name in ('vsdlssnr.dll', 'vsdlsssr.dll', 'nvngx_dlss.dll', 'nvngx_dlssnr.dll', 'dlssg/nvngx_dlssg.dll'):
+              path = Path('runtime') / name
+              with path.open('rb') as stream:
+                  if stream.read(2) != b'MZ':
+                      raise SystemExit(f'Missing binary payload (possibly an LFS pointer): {path}')
+          PY
+
+      - name: Set up publisher Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install tested packaging CLI
+        run: python -m pip install comfy-cli==1.11.1
+
+      - name: Publish node
+        env:
+          REGISTRY_ACCESS_TOKEN: ${{ secrets.REGISTRY_ACCESS_TOKEN }}
+        run: comfy --skip-prompt --no-enable-telemetry node publish --token "$REGISTRY_ACCESS_TOKEN"

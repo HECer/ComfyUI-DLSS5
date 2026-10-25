@@ -18,3 +18,19 @@ runtime/*
 !runtime/dlssg/nvngx_dlssg.dll
 docs/images/icon-source.png
 docs/images/proofs/**/*.png
+
+# Agent state and local test/tool artifacts are not part of an installed node.
+.agents/**
+.codex/**
+.claude/**
+.yoke/**
+.context/**
+.pytest-tmp/**
+.pytest_cache/**
+.ruff_cache/**
+__pycache__/**
+.agentmemory-project
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+RTK.md
